@@ -7,68 +7,8 @@
 //! see `docs/adr/0005-two-tier-fetch.md`.
 
 use std::collections::BTreeMap;
-use std::fmt;
 
-/// One of the six collections a Node API serves.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Collection {
-    /// The Node's own record.
-    Node,
-    /// The Devices the Node hosts.
-    Devices,
-    /// The Senders those Devices expose.
-    Senders,
-    /// The Receivers those Devices expose.
-    Receivers,
-    /// The Flows the Senders carry.
-    Flows,
-    /// The Sources those Flows originate from.
-    Sources,
-}
-
-impl Collection {
-    /// Every collection, in the order a Node's tree is read.
-    pub const ALL: [Collection; 6] = [
-        Collection::Node,
-        Collection::Devices,
-        Collection::Senders,
-        Collection::Receivers,
-        Collection::Flows,
-        Collection::Sources,
-    ];
-
-    /// The TXT record key this collection's counter is published under.
-    #[must_use]
-    pub fn counter_key(self) -> &'static str {
-        match self {
-            Collection::Node => "ver_slf",
-            Collection::Devices => "ver_dvc",
-            Collection::Senders => "ver_snd",
-            Collection::Receivers => "ver_rcv",
-            Collection::Flows => "ver_flw",
-            Collection::Sources => "ver_src",
-        }
-    }
-
-    /// The path segment this collection is read from.
-    #[must_use]
-    pub fn path(self) -> &'static str {
-        match self {
-            Collection::Node => "self",
-            Collection::Devices => "devices",
-            Collection::Senders => "senders",
-            Collection::Receivers => "receivers",
-            Collection::Flows => "flows",
-            Collection::Sources => "sources",
-        }
-    }
-}
-
-impl fmt::Display for Collection {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.path())
-    }
-}
+use jackfield_nmos::NodeCollection as Collection;
 
 /// What a Node's advertisement says about how current each collection is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

@@ -49,7 +49,8 @@ pub use node::{
     ApiEndpoint, AttachedNetworkDevice, Clock, Interface, Node, NodeApi, Protocol, Service,
 };
 pub use node_api::{
-    NodeApiClient, NodeApiClientBuilder, NodeApiError, ResourceTree, SUPPORTED_VERSIONS,
+    CollectionData, NodeApiClient, NodeApiClientBuilder, NodeApiError, NodeCollection,
+    ResourceTree, SUPPORTED_VERSIONS,
 };
 pub use receiver::{MediaCaps, Receiver, ReceiverCaps, ReceiverSubscription};
 pub use resource::{Capabilities, ResourceCore, ResourceId, Tags, Version};

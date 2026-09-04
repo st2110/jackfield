@@ -164,19 +164,19 @@ each task names how it is verified.
       their Flow; verify a dangling `flow_id` yields an unresolved marker while
       the rest of the tree stays usable (spec: `node-inventory`, dangling
       reference)
-- [ ] 7.3 Fetch Nodes concurrently with a bound of eight, requests within a Node
+- [x] 7.3 Fetch Nodes concurrently with a bound of eight, requests within a Node
       sequential, each with its own timeout; verify at most eight run at once
       with twenty Nodes discovered, and that one stalled Node delays no other
       (spec: `node-inventory`, fetching is bounded and isolated)
 - [x] 7.4 Implement refresh replacing a Node's tree; verify a Sender removed at
       the Node disappears on refresh, and a previously failed Node becomes
       browsable when it starts answering
-- [ ] 7.4a Drive re-reads from the version counters: re-read only the collections
+- [x] 7.4a Drive re-reads from the version counters: re-read only the collections
       whose counter moved, and leave an unchanged Node alone; verify a moved
       Receiver counter re-reads only Receivers, that an activated Sender becomes
       Transmitting with no operator action, and that an explicit refresh re-reads
       in full regardless of counters
-- [ ] 7.4b Run the transport pass separately — on counter change, and no less
+- [x] 7.4b Run the transport pass separately — on counter change, and no less
       than once a minute per Node; verify a Node whose counters never move still
       converges within the interval, that a quiet network generates no
       per-resource traffic between passes, and that resources not yet covered
@@ -193,7 +193,7 @@ each task names how it is verified.
       sharing a multicast address yield an ambiguous pairing with neither chosen,
       and that discovering the missing Node resolves the edge on both ends
       (spec: `node-inventory`, connections that cannot be resolved)
-- [ ] 7.5 Publish inventory snapshots on a channel and accept commands on
+- [x] 7.5 Publish inventory snapshots on a channel and accept commands on
       another (design D4); verify a command to refresh a Node reaches the
       fetcher and a resulting snapshot reaches the subscriber
 - [x] 7.6 Assert by test that nothing is written to disk: run a full discovery

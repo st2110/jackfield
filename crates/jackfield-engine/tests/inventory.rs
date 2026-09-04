@@ -768,3 +768,57 @@ fn listing(dir: &std::path::Path) -> Vec<String> {
     names.sort();
     names
 }
+
+#[test]
+fn the_connection_api_base_is_the_origin_of_the_advertised_control() {
+    // The Device advertises `.../x-nmos/connection/v1.1/`; the client builds
+    // that path itself, so keeping it would produce a doubled URL.
+    let mut inventory = Inventory::new();
+    let key = inventory.observe(&advertisement("converter", [10, 77, 1, 90], 8090));
+    inventory.set_tree(&key, bench_tree());
+
+    assert_eq!(
+        inventory.connection_base(&key).as_deref(),
+        Some("http://10.77.1.90:8090")
+    );
+}
+
+#[test]
+fn a_node_advertising_no_connection_control_has_no_connection_base() {
+    let mut inventory = Inventory::new();
+    let key = inventory.observe(&advertisement("converter", [10, 77, 1, 90], 8090));
+    let mut plain = device(10, "SDI 1", 1);
+    plain.controls.clear();
+    inventory.set_tree(&key, TreeBuilder::new(1, "Converter").device(plain).build());
+
+    assert_eq!(inventory.connection_base(&key), None);
+}
+
+#[test]
+fn only_the_collection_given_is_replaced() {
+    use jackfield_nmos::CollectionData;
+
+    let mut inventory = Inventory::new();
+    let key = inventory.observe(&advertisement("converter", [10, 77, 1, 90], 8090));
+    inventory.set_tree(&key, bench_tree());
+    assert_eq!(inventory.node(&key).unwrap().devices()[0].senders.len(), 3);
+
+    inventory.update_collection(&key, CollectionData::Receivers(Vec::new()));
+
+    let devices = inventory.node(&key).unwrap().devices();
+    assert_eq!(devices[0].senders.len(), 3, "Senders were not touched");
+    assert!(devices[0].receivers.is_empty(), "Receivers were replaced");
+    assert_eq!(devices.len(), 3, "Devices were not touched");
+}
+
+#[test]
+fn a_partial_update_to_a_node_never_read_is_ignored() {
+    use jackfield_nmos::CollectionData;
+
+    let mut inventory = Inventory::new();
+    let key = inventory.observe(&advertisement("converter", [10, 77, 1, 90], 8090));
+    inventory.update_collection(&key, CollectionData::Receivers(Vec::new()));
+
+    assert_eq!(inventory.node(&key).unwrap().state, NodeState::Loading);
+    assert!(!inventory.has_tree(&key));
+}

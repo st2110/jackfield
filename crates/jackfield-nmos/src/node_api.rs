@@ -26,6 +26,103 @@ use crate::version::{ApiVersion, negotiate};
 /// the tool useless on the many deployed devices that speak `v1.2`.
 pub const SUPPORTED_VERSIONS: [ApiVersion; 2] = [ApiVersion::new(1, 2), ApiVersion::new(1, 3)];
 
+/// One of the six collections a Node API serves.
+///
+/// The paths and the `ver_*` keys are both IS-04's, so they live together here
+/// rather than being split between the protocol and whatever reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum NodeCollection {
+    /// The Node's own record.
+    Node,
+    /// The Devices the Node hosts.
+    Devices,
+    /// The Senders those Devices expose.
+    Senders,
+    /// The Receivers those Devices expose.
+    Receivers,
+    /// The Flows the Senders carry.
+    Flows,
+    /// The Sources those Flows originate from.
+    Sources,
+}
+
+impl NodeCollection {
+    /// Every collection, in the order a Node's tree is read.
+    pub const ALL: [NodeCollection; 6] = [
+        NodeCollection::Node,
+        NodeCollection::Devices,
+        NodeCollection::Senders,
+        NodeCollection::Receivers,
+        NodeCollection::Flows,
+        NodeCollection::Sources,
+    ];
+
+    /// The path segment this collection is read from.
+    #[must_use]
+    pub fn path(self) -> &'static str {
+        match self {
+            NodeCollection::Node => "self",
+            NodeCollection::Devices => "devices",
+            NodeCollection::Senders => "senders",
+            NodeCollection::Receivers => "receivers",
+            NodeCollection::Flows => "flows",
+            NodeCollection::Sources => "sources",
+        }
+    }
+
+    /// The DNS-SD TXT record key this collection's version counter is
+    /// published under.
+    #[must_use]
+    pub fn counter_key(self) -> &'static str {
+        match self {
+            NodeCollection::Node => "ver_slf",
+            NodeCollection::Devices => "ver_dvc",
+            NodeCollection::Senders => "ver_snd",
+            NodeCollection::Receivers => "ver_rcv",
+            NodeCollection::Flows => "ver_flw",
+            NodeCollection::Sources => "ver_src",
+        }
+    }
+}
+
+impl std::fmt::Display for NodeCollection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.path())
+    }
+}
+
+/// What one collection of a Node's tree contains.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CollectionData {
+    /// The Node's own record.
+    Node(Box<Node>),
+    /// The Devices the Node hosts.
+    Devices(Vec<Device>),
+    /// The Senders those Devices expose.
+    Senders(Vec<Sender>),
+    /// The Receivers those Devices expose.
+    Receivers(Vec<Receiver>),
+    /// The Flows the Senders carry.
+    Flows(Vec<Flow>),
+    /// The Sources those Flows originate from.
+    Sources(Vec<Source>),
+}
+
+impl CollectionData {
+    /// Which collection this is.
+    #[must_use]
+    pub fn collection(&self) -> NodeCollection {
+        match self {
+            CollectionData::Node(_) => NodeCollection::Node,
+            CollectionData::Devices(_) => NodeCollection::Devices,
+            CollectionData::Senders(_) => NodeCollection::Senders,
+            CollectionData::Receivers(_) => NodeCollection::Receivers,
+            CollectionData::Flows(_) => NodeCollection::Flows,
+            CollectionData::Sources(_) => NodeCollection::Sources,
+        }
+    }
+}
+
 /// Everything a Node says about itself, read in one pass.
 ///
 /// This is the whole of the cheap tier: six requests, and every Sender and
@@ -218,6 +315,57 @@ impl NodeApiClient {
             receivers: self.collection(&prefix, "receivers").await?,
             flows: self.collection(&prefix, "flows").await?,
             sources: self.collection(&prefix, "sources").await?,
+        })
+    }
+
+    /// Read one collection of a Node's tree.
+    ///
+    /// The whole tree costs six requests; one collection costs one. That is
+    /// what makes counter-driven refresh worth having — a Node whose Receivers
+    /// changed does not need its Flows read again.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`NodeApiError::UnsupportedVersion`] when nothing overlaps, and
+    /// otherwise the failure, naming the collection.
+    pub async fn fetch_collection(
+        &self,
+        base: &str,
+        offered: &[ApiVersion],
+        collection: NodeCollection,
+    ) -> Result<CollectionData, NodeApiError> {
+        let version = self.negotiated(offered)?;
+        let prefix = format!("{}/x-nmos/node/{version}", base.trim_end_matches('/'));
+        let path = collection.path();
+
+        Ok(match collection {
+            NodeCollection::Node => {
+                CollectionData::Node(Box::new(self.collection(&prefix, path).await?))
+            }
+            NodeCollection::Devices => {
+                CollectionData::Devices(self.collection(&prefix, path).await?)
+            }
+            NodeCollection::Senders => {
+                CollectionData::Senders(self.collection(&prefix, path).await?)
+            }
+            NodeCollection::Receivers => {
+                CollectionData::Receivers(self.collection(&prefix, path).await?)
+            }
+            NodeCollection::Flows => CollectionData::Flows(self.collection(&prefix, path).await?),
+            NodeCollection::Sources => {
+                CollectionData::Sources(self.collection(&prefix, path).await?)
+            }
+        })
+    }
+
+    /// The highest version this client and the Node both understand.
+    fn negotiated(&self, offered: &[ApiVersion]) -> Result<ApiVersion, NodeApiError> {
+        negotiate(offered, &SUPPORTED_VERSIONS).ok_or_else(|| NodeApiError::UnsupportedVersion {
+            offered: offered.iter().map(ApiVersion::to_string).collect(),
+            supported: SUPPORTED_VERSIONS
+                .iter()
+                .map(ApiVersion::to_string)
+                .collect(),
         })
     }
 

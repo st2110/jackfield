@@ -19,6 +19,8 @@
 )]
 
 mod discovery;
+mod engine;
+mod fetcher;
 mod identity;
 mod inventory;
 
@@ -27,6 +29,11 @@ pub use discovery::{
     Advertisement, Collection, Discovery, DiscoveryEvent, Endpoint, FabricatedDiscovery,
     NODE_SERVICE_TYPE, Subscription, VersionCounters,
 };
+pub use engine::{
+    Command, Engine, EngineConfig, EngineHandle, FETCH_CONCURRENCY, Fetcher, Snapshot,
+    TRANSPORT_FLOOR,
+};
+pub use fetcher::NmosFetcher;
 pub use identity::{Identified, Identities, NodeKey};
 pub use inventory::{
     DeviceView, Inventory, KnownNode, Media, NodeContents, NodeState, Orphan, OrphanKind, Pairing,

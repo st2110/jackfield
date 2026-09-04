@@ -11,7 +11,9 @@ mod view;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use jackfield_nmos::{ReceiverTransport, ResourceId, ResourceTree, SenderTransport};
+use jackfield_nmos::{
+    CollectionData, ReceiverTransport, ResourceId, ResourceTree, SenderTransport,
+};
 
 use crate::discovery::{Advertisement, Endpoint, VersionCounters};
 use crate::identity::{Identities, NodeKey};
@@ -30,6 +32,9 @@ pub use view::{
 pub struct Inventory {
     identities: Identities,
     nodes: BTreeMap<NodeKey, KnownNode>,
+    /// The last tree read from each Node, kept so a counter-driven re-read of
+    /// one collection can replace that collection alone.
+    trees: BTreeMap<NodeKey, ResourceTree>,
     counters: BTreeMap<NodeKey, VersionCounters>,
     /// Transport parameters, held per Node so a re-read of the tree does not
     /// throw away the slower pass's work.
@@ -106,6 +111,9 @@ impl Inventory {
                 merged.state = node.state;
             }
             merged.key = settled.clone();
+            if let Some(tree) = self.trees.remove(&was) {
+                self.trees.entry(settled.clone()).or_insert(tree);
+            }
             if let Some(counters) = counters {
                 self.counters.entry(settled.clone()).or_insert(counters);
             }
@@ -130,6 +138,7 @@ impl Inventory {
         }
         self.nodes.remove(&key);
         self.counters.remove(&key);
+        self.trees.remove(&key);
     }
 
     /// Record a Node's resource tree, resolving its references.
@@ -137,14 +146,52 @@ impl Inventory {
     /// Replaces whatever was held: a Sender removed at the Node disappears
     /// here, which is what makes an explicit refresh meaningful.
     pub fn set_tree(&mut self, key: &NodeKey, tree: ResourceTree) {
-        let Some(node) = self.nodes.get_mut(key) else {
+        if !self.nodes.contains_key(key) {
+            return;
+        }
+        self.trees.insert(key.clone(), tree);
+        self.rebuild(key);
+    }
+
+    /// Replace one collection of a Node's tree, leaving the rest alone.
+    ///
+    /// This is what makes counter-driven refresh worth having: a Node whose
+    /// Receivers changed is not re-read in full. A Node whose tree has never
+    /// been read is left alone, because a collection on its own is not a Node.
+    pub fn update_collection(&mut self, key: &NodeKey, data: CollectionData) {
+        let Some(tree) = self.trees.get_mut(key) else {
             return;
         };
-        node.state = NodeState::Ready(Box::new(resolve::contents(
-            tree,
+        match data {
+            CollectionData::Node(node) => tree.node = *node,
+            CollectionData::Devices(devices) => tree.devices = devices,
+            CollectionData::Senders(senders) => tree.senders = senders,
+            CollectionData::Receivers(receivers) => tree.receivers = receivers,
+            CollectionData::Flows(flows) => tree.flows = flows,
+            CollectionData::Sources(sources) => tree.sources = sources,
+        }
+        self.rebuild(key);
+    }
+
+    /// Whether a Node's tree has been read at all.
+    #[must_use]
+    pub fn has_tree(&self, key: &NodeKey) -> bool {
+        self.trees.contains_key(key)
+    }
+
+    /// Re-derive one Node's contents from the tree currently held.
+    fn rebuild(&mut self, key: &NodeKey) {
+        let Some(tree) = self.trees.get(key) else {
+            return;
+        };
+        let contents = resolve::contents(
+            tree.clone(),
             &self.sender_transports,
             &self.receiver_transports,
-        )));
+        );
+        if let Some(node) = self.nodes.get_mut(key) {
+            node.state = NodeState::Ready(Box::new(contents));
+        }
     }
 
     /// Record that a Node could not be read.
@@ -232,6 +279,52 @@ impl Inventory {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
+    }
+
+    /// Every Sender and Receiver a Node exposes, for the transport pass.
+    #[must_use]
+    pub fn resources_of(&self, key: &NodeKey) -> (Vec<ResourceId>, Vec<ResourceId>) {
+        let Some(tree) = self.trees.get(key) else {
+            return (Vec::new(), Vec::new());
+        };
+        (
+            tree.senders.iter().map(|s| s.core.id.clone()).collect(),
+            tree.receivers.iter().map(|r| r.core.id.clone()).collect(),
+        )
+    }
+
+    /// Where a Node advertises its Connection API, if any of its Devices does.
+    #[must_use]
+    pub fn connection_base(&self, key: &NodeKey) -> Option<String> {
+        self.trees.get(key)?.devices.iter().find_map(|device| {
+            device
+                .control_href(jackfield_nmos::CONNECTION_CONTROL_URN)
+                .map(|href| {
+                    // The advertised href already ends in `/x-nmos/connection/v1.1/`;
+                    // the client builds that path itself, so only the origin is kept.
+                    let trimmed = href.trim_end_matches('/');
+                    match trimmed.find("/x-nmos/connection") {
+                        Some(at) => trimmed.get(..at).unwrap_or(trimmed).to_owned(),
+                        None => trimmed.to_owned(),
+                    }
+                })
+        })
+    }
+
+    /// The API versions a Node's own record says it speaks.
+    #[must_use]
+    pub fn versions_of(&self, key: &NodeKey) -> Vec<jackfield_nmos::ApiVersion> {
+        self.trees
+            .get(key)
+            .map(|tree| {
+                tree.node
+                    .api
+                    .versions
+                    .iter()
+                    .filter_map(|v| v.parse().ok())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// The address to reach a Node at.
