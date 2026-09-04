@@ -251,15 +251,15 @@ each task names how it is verified.
 
 ## 9. Binary (`jackfield`)
 
-- [ ] 9.1 Wire discovery, inventory, and interface together over the channels;
+- [x] 9.1 Wire discovery, inventory, and interface together over the channels;
       verify the binary starts against a fixture Node and renders it
-- [ ] 9.2 Add argument parsing and `tracing` logging to a file or stderr that
+- [x] 9.2 Add argument parsing and `tracing` logging to a file or stderr that
       does not corrupt the alternate screen; verify logs are readable after a run
       and the display is undisturbed during one
-- [ ] 9.3 Ensure the event loop waits on terminal input and engine snapshots
+- [x] 9.3 Ensure the event loop waits on terminal input and engine snapshots
       together (design D5); verify a keystroke is served while a Node fetch is
       deliberately stalled (spec: `tui-browser`, quitting during a slow fetch)
-- [ ] 9.4 Add an end-to-end test: two fixture Nodes, one healthy and one
+- [x] 9.4 Add an end-to-end test: two fixture Nodes, one healthy and one
       refusing connections, driven through discovery to a rendered screen;
       verify the healthy Node is browsable and the failure is confined to its row
 

@@ -18,6 +18,7 @@ authors = ["Flussonic"]
 [workspace.dependencies]
 jackfield-nmos = { path = "crates/jackfield-nmos" }
 jackfield-engine = { path = "crates/jackfield-engine" }
+jackfield-tui = { path = "crates/jackfield-tui" }
 
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.20"
@@ -32,6 +33,9 @@ tracing = "0.1.44"
 # not a direct dependency — `ratatui::crossterm` re-exports the version it was
 # built against, and two versions of it cannot exchange events.
 ratatui = "0.29.0"
+anyhow = "1.0.104"
+clap = { version = "4.6.6", features = ["derive"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 # Test-only: the validators applied to the vendored AMWA schemas, and the
 # fixture Nodes the clients are exercised against.

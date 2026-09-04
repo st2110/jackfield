@@ -9,6 +9,23 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+clap.workspace = true
+jackfield-engine.workspace = true
+jackfield-nmos.workspace = true
+jackfield-tui.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "signal"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+jackfield-tui.workspace = true
+ratatui.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+wiremock.workspace = true

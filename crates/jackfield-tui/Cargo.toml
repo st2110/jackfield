@@ -12,6 +12,8 @@ authors.workspace = true
 jackfield-engine.workspace = true
 jackfield-nmos.workspace = true
 ratatui.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

@@ -18,11 +18,13 @@
 )]
 
 mod app;
+mod input;
 mod keys;
 mod render;
 mod terminal;
 
 pub use app::{App, Screen};
+pub use input::keys;
 pub use keys::{Action, action_for};
 pub use render::{KEY_HINTS, draw};
 pub use terminal::TerminalGuard;
