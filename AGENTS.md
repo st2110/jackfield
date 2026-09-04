@@ -103,5 +103,5 @@ The project lives in two mirrors:
 - Keep the commit message body short: at most 3 lines of description. Say what changed
   and why; leave the details to the diff.
 - If the work is done in the context of a ticket, put the ticket reference on the last
-  line so it can be linked from the commit, e.g. a trailing `Refs: <ticket-id>` line.
+  line so it can be linked from the commit, e.g. a trailing `Refs #<ticket-id>` line.
 - Commit messages are English only, like everything else in this repository.
