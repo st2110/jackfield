@@ -1,0 +1,14 @@
+[package]
+name = "jackfield-nmos"
+description = "NMOS IS-04 and IS-05 resource model and read-only HTTP clients"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

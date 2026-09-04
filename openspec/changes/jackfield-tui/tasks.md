@@ -8,21 +8,21 @@ each task names how it is verified.
 
 ## 1. Workspace and house rules
 
-- [ ] 1.1 Create the Cargo workspace: root `Cargo.toml` with members
+- [x] 1.1 Create the Cargo workspace: root `Cargo.toml` with members
       `jackfield-nmos`, `jackfield-engine`, `jackfield-tui`, `jackfield`,
       edition 2024, shared `[workspace.package]` metadata (Apache-2.0, repository
       pointing at the public mirror); verify `cargo metadata` lists all four
       members and `cargo build` succeeds on the empty crates
-- [ ] 1.2 Add `[workspace.lints]` denying panics per `AGENTS.md`
+- [x] 1.2 Add `[workspace.lints]` denying panics per `AGENTS.md`
       (`unwrap_used`, `expect_used`, `panic`, `indexing_slicing`, `todo`,
       `unimplemented`, `correctness`), inherited by every crate with
       `[lints] workspace = true`; verify by adding a temporary `.unwrap()` in a
       non-test function and confirming `cargo clippy --all-targets` fails on it,
       then removing it
-- [ ] 1.3 Add `rustfmt.toml`, `rust-toolchain.toml` pinning the toolchain, and a
+- [x] 1.3 Add `rustfmt.toml`, `rust-toolchain.toml` pinning the toolchain, and a
       `Makefile` with `fmt`, `lint`, `test` targets; verify `make lint` and
       `make test` both run clean on the empty workspace
-- [ ] 1.4 Add `.gitignore` entries for `target/`; verify `git status` is clean
+- [x] 1.4 Add `.gitignore` entries for `target/`; verify `git status` is clean
       after a full `cargo build`
 
 ## 2. Vendored contract and architecture decisions

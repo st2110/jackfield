@@ -1,0 +1,43 @@
+[workspace]
+members = [
+    "crates/jackfield-nmos",
+    "crates/jackfield-engine",
+    "crates/jackfield-tui",
+    "crates/jackfield",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/st2110/jackfield"
+authors = ["Flussonic"]
+
+[workspace.dependencies]
+jackfield-nmos = { path = "crates/jackfield-nmos" }
+jackfield-engine = { path = "crates/jackfield-engine" }
+jackfield-tui = { path = "crates/jackfield-tui" }
+
+# A controller that drives live 2110 equipment must return errors, not abort.
+# See AGENTS.md, "No panics in production code".
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+todo = "deny"
+unimplemented = "deny"
+correctness = "deny"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+# Deliberately not `panic = "abort"`: the terminal guard restores the screen
+# from its `Drop`, which only runs while unwinding.
+
+[profile.dev.package."*"]
+opt-level = 3
