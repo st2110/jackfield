@@ -56,23 +56,87 @@ than discarding the advertisement.
 - **THEN** the discovered Node is marked as requiring authorization, so that the
   rest of the system can report it as unreachable rather than failing obscurely
 
-### Requirement: A Node is identified by its API endpoint
+### Requirement: A Node is identified by the identifier it reports
 
-The system SHALL treat the combination of network address and port as the
-identity of a discovered Node, and SHALL report each such endpoint at most once
-regardless of how many interfaces or address families it is advertised on.
+A Node's identity SHALL be the identifier the Node reports for itself. Until that
+identifier has been read, an advertised endpoint SHALL serve as a provisional
+identity, because nothing better is known. Once the identifier is known, every
+endpoint bearing it SHALL collapse into that one Node, whose endpoints are a set.
+
+An endpoint MUST NOT be treated as an identity after the identifier is known: a
+Node advertised at two addresses is one Node, and 2110 equipment is routinely
+multi-homed.
 
 #### Scenario: Same Node advertised on several interfaces
 
-- **WHEN** one Node is advertised over two network interfaces with the same
-  address and port
-- **THEN** the system reports it as a single Node, not two
+- **WHEN** one Node is advertised over three network interfaces resolving to the
+  same address and port
+- **THEN** the system reports a single Node with one endpoint
+
+#### Scenario: Node advertised at two different addresses
+
+- **WHEN** a Node advertises itself at two different addresses and both report
+  the same identifier
+- **THEN** the system reports one Node holding both endpoints, not two Nodes
 
 #### Scenario: One host advertising two Nodes
 
 - **WHEN** a single host advertises two Nodes on the same address but different
-  ports
+  ports, reporting different identifiers
 - **THEN** the system reports two distinct Nodes
+
+#### Scenario: Not yet identified
+
+- **WHEN** a Node has been advertised but its identifier has not yet been read
+- **THEN** it is reported under its endpoint, and is re-keyed to its identifier
+  once that is known, without appearing twice in the meantime
+
+#### Scenario: One endpoint of a Node stops answering
+
+- **WHEN** a Node holding two endpoints stops answering at one of them
+- **THEN** the Node remains reachable through the other, and is not reported as
+  failed
+
+### Requirement: Both address families are accepted
+
+The system SHALL accept advertisements carrying IPv4 or IPv6 addresses and SHALL
+keep both in the Node's endpoint set. Where a Node offers both, an IPv4 endpoint
+SHALL be preferred for requests, IPv6 being untested against the equipment this
+change targets.
+
+#### Scenario: Node advertised over IPv6 only
+
+- **WHEN** a Node advertises only an IPv6 address
+- **THEN** it is discovered and its IPv6 endpoint is used
+
+#### Scenario: Node advertised over both families
+
+- **WHEN** a Node advertises both an IPv4 and an IPv6 address
+- **THEN** both are held as endpoints and the IPv4 one is used for requests
+
+### Requirement: Version counters are captured
+
+The system SHALL read the per-collection version counters a Node publishes in its
+advertisement and SHALL report their current values with the Node. A counter that
+is absent SHALL be reported as absent rather than as zero, since zero is a
+legitimate value that would falsely imply the collection had been observed.
+
+#### Scenario: Counters are reported
+
+- **WHEN** a Node advertises counters for its resource collections
+- **THEN** each counter's value is reported with the discovered Node
+
+#### Scenario: Counter changes
+
+- **WHEN** a Node re-advertises with a counter holding a different value from the
+  one previously seen
+- **THEN** the system reports that this collection has changed
+
+#### Scenario: Node publishing no counters
+
+- **WHEN** a Node advertises without any version counters
+- **THEN** the Node is discovered normally and its counters are reported as
+  absent
 
 ### Requirement: Departure is observable
 

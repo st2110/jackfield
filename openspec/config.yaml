@@ -17,6 +17,22 @@ context: |
   strings, UI copy. The only exception is localization data. This holds even when
   the conversation with the user is in another language.
 
+  --- GLOSSARY ---
+  CONTEXT.md at the repository root is the canonical glossary. Read it before
+  naming anything, and add new terms there rather than here. The core, repeated
+  below only so it is never missing:
+
+  IS-04 containment is strict and its words are used exactly. A **Node** is one
+  logical host, advertised over mDNS; it holds **Devices**; a Device holds
+  **Senders** and **Receivers**; a Sender carries a **Flow**, which comes from a
+  **Source**. Never call a Node a "device".
+
+  Connection has three vocabularies, not one. A Sender is **Transmitting** or
+  **Idle** — transmitting says nothing about whether anyone listens. A Receiver is
+  **Subscribed** or **Unsubscribed**. The word *connected* describes the pair.
+  State that has not been read is **Unknown**, which is not the same as Idle or
+  Unsubscribed.
+
   --- STANDARDS (see AGENTS.md, symlinked as CLAUDE.md) ---
   Rust: async with tokio; invoke the `rust-skills` skill before writing or
   reviewing Rust. No panics in production code — `unwrap`, `expect`, `panic!`,
@@ -35,39 +51,10 @@ context: |
 
   Technical decisions that outlive a single change go to `docs/adr/`.
 
-  --- GLOSSARY: NMOS RESOURCE MODEL (IS-04) ---
-  Use the specification's meanings exactly. Do not use "device" loosely for "the
-  box on the network" — that is a Node.
-
-  **Node**: one logical host on the network, advertised over mDNS as
-  `_nmos-node._tcp`. Holds Devices. _Not_: box, machine, unit.
-
-  **Device**: a grouping within a Node that owns Senders and Receivers. A Node may
-  host several. _Not_: node, endpoint.
-
-  **Sender**: an egress from a Device — carries a Flow onto the network.
-
-  **Receiver**: an ingress to a Device — consumes a stream from the network.
-  Together with Senders, these are what an operator calls the box's outputs and
-  inputs.
-
-  **Flow**: the media a Sender carries (video raw or coded, audio, data, SDI
-  ancillary data, mux). Originates from a Source.
-
-  **Source**: the logical origin of a Flow.
-
-  **Active state**: a Sender's or Receiver's current connection, read from IS-05
-  `/single/{senders|receivers}/{id}/active`. Derived value: active, inactive, or
-  unknown when the Connection API could not be read. Never report unknown as
-  inactive.
-
   --- SPECIFICATIONS ---
   IS-04 Discovery and Registration (Node API), IS-05 Device Connection Management
   (Connection API). AMWA publishes these as RAML plus JSON Schema draft-04 — there
   is no official OpenAPI. Rust types are written by hand; the vendored schemas are
-  used as validators in the test suite, in both directions (published examples
-  must parse; our serialized output must validate). See
-  docs/adr/0001-nmos-types-by-hand-schemas-as-validators.md.
-
-  Discovery is peer-to-peer over mDNS with no registry, spoken in-process via
-  `mdns-sd` — never by shelling out to `avahi-browse`.
+  used as validators in the test suite, in both directions. Discovery is
+  peer-to-peer over mDNS with no registry, spoken in-process via `mdns-sd` — never
+  by shelling out to `avahi-browse`. See docs/adr/.

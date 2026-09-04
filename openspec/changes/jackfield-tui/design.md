@@ -42,6 +42,19 @@ the shape of the interface more sharply than argument could:
   advertise `audio/L24` while two of the Senders emit `audio/L16`. Nothing in
   this read-only change acts on that, but it is a real mismatch a controller must
   face once it starts making connections.
+- **IS-04 already carries connection state.** Each Sender and Receiver has a
+  `subscription` object, and its `active` flag agrees exactly with IS-05's
+  `master_enable`: the three `SDI 1` Senders report `{"active": true}`, the rest
+  `false`. State therefore costs six requests per Node, not twenty-four.
+- **But this device leaves the pairing empty.** `subscription.receiver_id` is
+  `null` on an active Sender, and `subscription.sender_id` is `null` on every
+  Receiver. The identifiers IS-04 provides for pairing are simply not populated,
+  so who-feeds-whom cannot be answered from the resource tree on this hardware and
+  must be recovered from the transport parameters in IS-05.
+- Its advertisement carries the IS-04 peer-to-peer version counters —
+  `ver_slf`, `ver_dvc`, `ver_snd=17`, `ver_rcv`, `ver_flw=4`, `ver_src` — which
+  is the mechanism the specification provides for noticing change without
+  polling.
 
 ## Goals / Non-Goals
 
@@ -173,7 +186,54 @@ per the house rule. A Node failure is a value stored against that Node in the
 inventory — not a log line, not a lost row — because the specs require the
 operator to see it on screen.
 
-### D8. Group by Device, and identify every resource by its media type
+### D8. A Node is what it says it is, not where it answers
+
+Identity is the Node's own identifier, with endpoints as a set attached to it.
+Before the identifier has been read there is nothing else to key on, so the
+endpoint serves provisionally and is re-keyed on first successful fetch.
+
+The tempting simplification — endpoint as identity — survives exactly as long as
+every Node has one address. ST 2110 equipment is multi-homed by design: two media
+NICs for ST 2022-7 seamless protection, often a separate management port. A
+controller that lists such a box twice is worse than useless, because the operator
+cannot tell which of the two rows is real.
+
+### D9. Two tiers of fetching: state is cheap, transport is not
+
+State comes from the resource tree: six requests per Node, and the whole tree is
+re-read only for the collections whose version counters moved. Transport
+parameters come from the Connection API at one request per Sender and per
+Receiver — eighteen on the bench converter — so they are a second, slower pass,
+triggered by the same counters and floored at once a minute per Node for Nodes
+whose counters cannot be trusted.
+
+The consequence is that connection state and the connection graph refresh on
+different clocks, and the interface says which parts are pending rather than
+pretending they agree. This is a deliberate trade: on a plant of a few dozen boxes
+the eager alternative is hundreds of requests per cycle against equipment that is
+on air.
+
+The floor exists because the counter mechanism is only as good as the vendor's
+implementation of it, and we have chosen not to verify it by writing to live
+hardware.
+
+### D10. The connection graph is the product, and its gaps are shown
+
+Whether a Sender is transmitting and whether anyone is listening are different
+questions, and only the second is what an operator means by "connected". The
+engine holds every Node, so it is the only place the second question can be
+answered: it pairs Receivers to Senders by reported identifier, and — because the
+bench hardware reports none — by matching stream address and port.
+
+Where a pairing cannot be made, the state is named rather than hidden. A Receiver
+pointing at an undiscovered Sender says so, carrying the identifier. A stream
+matching two Senders is reported as ambiguous with both named: two sources in one
+multicast group is a fault, and a controller that quietly picks one has destroyed
+the only evidence of it. Silently dropping an unresolved edge would recreate
+exactly the lie this decision exists to remove — a Receiver that is subscribed
+would render as though it were not.
+
+### D11. Group by Device, and identify every resource by its media type
 
 Senders and Receivers are always grouped under the Device that owns them, never
 flattened into two lists per Node. The bench settles it: a single converter
@@ -188,12 +248,14 @@ the media types it accepts, resolved by the engine rather than assembled in the
 interface. This is why `node-inventory` resolves the Sender-to-Flow reference at
 all: it is not bookkeeping, it is the only thing that tells two rows apart.
 
-### D9. Decisions that outlive this change go to `docs/adr/`
+### D12. Decisions that outlive this change go to `docs/adr/`
 
-Three of the above are architectural and will be questioned again: the schema
-strategy (D1, D2), discovery without a registry (D3), and the crate split (D4).
-Each gets an ADR, which is the durable record; this document is the record of
-*this change* and will be archived with it.
+Five of the above are architectural and will be questioned again: the schema
+strategy (D1, D2), discovery without a registry (D3), the crate split (D4), the
+connection vocabulary and graph (D10), and the two-tier fetch (D9). Each gets an
+ADR, which is the durable record; this document is the record of *this change* and
+will be archived with it. The project's vocabulary lives in `CONTEXT.md` at the
+repository root, which is the canonical glossary.
 
 ## Risks / Trade-offs
 
@@ -210,10 +272,20 @@ Each gets an ADR, which is the durable record; this document is the record of
 - **Concurrent fetches against a small device flood it** → Per-Node concurrency
   is bounded and requests within a Node are sequential; a device answering one
   request at a time is the norm, not the exception.
-- **Reading `/active` per Sender and Receiver is N+1 requests** → Acceptable at
-  the scale of one plant, and honest: IS-05 has no bulk read of active state. If
-  it hurts, the fix is caching against the Node's version counters, which is a
-  later change and not worth pre-building.
+- **Vendors do not maintain their version counters** → The specification requires
+  a Node to increment a collection's counter when it changes; real equipment is
+  uneven about it, and we have deliberately not verified it by writing to live
+  hardware. The periodic floor on the transport pass converges regardless, at the
+  cost of latency on such Nodes. Counter handling is tested against fabricated
+  advertisements, not against the bench.
+- **The graph is only as complete as discovery** → In peer-to-peer mode a Receiver
+  fed from another network segment names a Sender we will never see. This produces
+  an unresolved edge, which is honest but not satisfying; it resolves when a
+  registry client arrives.
+- **Pairing by stream address can be wrong** → Two Senders in one multicast group
+  make the match ambiguous, and a Receiver could in principle be joined to a group
+  it is not actually being fed by. Ambiguity is reported rather than resolved, so
+  the failure mode is an operator seeing a question rather than a wrong answer.
 - **Terminal state left broken if the process dies badly** → Restoration is tied
   to a guard whose `Drop` runs on normal exit and on panic unwind. A hard abort
   can still leave a terminal in raw mode; the house rule against panics in
@@ -229,6 +301,6 @@ reverting the commits.
 
 ## Open Questions
 
-None. The one question this design carried — whether to group Senders and
+None. The question this design once carried — whether to group Senders and
 Receivers under their Device or to flatten them per Node — was settled on the
-bench and is recorded as D9 above.
+bench and is recorded as D11 above.
