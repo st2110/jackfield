@@ -38,10 +38,11 @@ asking for a rescan.
 
 ### Requirement: Selecting a Node shows its Devices, Senders and Receivers
 
-Entering a Node SHALL present the resources that Node hosts: its Devices, and
-under each Device the Senders and Receivers belonging to it. Senders and
+Entering a Node SHALL present the resources that Node hosts grouped by Device:
+each Device, and under it the Senders and Receivers belonging to it. Senders and
 Receivers SHALL be distinguishable from one another, and each SHALL carry the
-label the Node reports for it.
+label the Node reports for it. The grouping SHALL be kept whatever the number of
+Devices — Senders and Receivers are never flattened into per-Node lists.
 
 #### Scenario: Node with one Device
 
@@ -49,6 +50,13 @@ label the Node reports for it.
   Receivers
 - **THEN** the detail pane shows that Device with its two Senders and two
   Receivers under it
+
+#### Scenario: One Device per physical port
+
+- **WHEN** the operator enters a Node hosting three Devices of three Senders and
+  three Receivers each
+- **THEN** each Device is shown with its own three Senders and three Receivers,
+  and no resource appears outside the Device that owns it
 
 #### Scenario: Node with several Devices
 
@@ -60,6 +68,31 @@ label the Node reports for it.
 
 - **WHEN** a Device exposes neither Senders nor Receivers
 - **THEN** the Device is still shown, marked as having no resources
+
+### Requirement: Resources are told apart by media type, not by label alone
+
+Node labels are not reliably unique: a Device commonly presents several Senders
+carrying the same label, distinguished only by the media they carry. Every Sender
+SHALL therefore be shown with the media type of the Flow it sends, and every
+Receiver with the media types it accepts. Two resources on the same Device MUST
+NOT be presented identically.
+
+#### Scenario: Senders sharing a label
+
+- **WHEN** a Device exposes three Senders all labelled `SDI 1`, carrying
+  `video/raw`, `audio/L24` and `video/smpte291`
+- **THEN** all three are distinguishable on screen, each showing its media type
+
+#### Scenario: Receiver capabilities are shown
+
+- **WHEN** a Receiver accepts `audio/L24`
+- **THEN** that is shown on the Receiver's row
+
+#### Scenario: Media type unavailable
+
+- **WHEN** a Sender's Flow could not be resolved
+- **THEN** the row says the media type is unknown rather than showing a blank
+  that reads as "no media"
 
 ### Requirement: Every Sender and Receiver shows whether it is connected
 

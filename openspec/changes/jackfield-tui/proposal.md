@@ -2,11 +2,11 @@
 
 ## Why
 
-Operating an ST 2110 plant today means either a vendor controller (Riedel and
-friends — expensive, appliance-bound, opaque) or `nmosctl.py`, a 182-line stopgap
-that shells out to `avahi-browse`, prints flat text, and holds no state between
-invocations. Neither lets an engineer sit in front of a rack and answer the first
-question that matters: *what is on this network, and what is it connected to?*
+Operating an ST 2110 plant today means either a vendor controller — expensive,
+appliance-bound, opaque — or a handful of `curl` calls against each box in turn,
+printing flat text and holding no state between invocations. Neither lets an
+engineer sit in front of a rack and answer the first question that matters:
+*what is on this network, and what is it connected to?*
 
 Jackfield answers that question in a terminal. This first change builds the
 foundation everything else needs — find the Nodes, read their resource tree, show
@@ -38,8 +38,7 @@ it — without yet touching a single device's configuration.
 - Making or breaking connections (IS-05 `staged` PATCH, `activate_immediate`,
   SDP transport files). The point of the program is to start 2110 broadcast; this
   change stops one step short of it, at read-only visibility.
-- IS-04 Registry and Query API. Discovery here is peer-to-peer over mDNS, the way
-  `nmosctl.py` does it.
+- IS-04 Registry and Query API. Discovery here is peer-to-peer over mDNS.
 - Persistence, authentication (IS-10), HTTPS, and IS-07/IS-08.
 - Any use of `sapsan/crates/nmos`, which implements the Node side, not the
   controller side.

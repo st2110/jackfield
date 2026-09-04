@@ -158,9 +158,16 @@ each task names how it is verified.
       the loading, failed, and departed presentations; verify each state is
       distinguishable in the rendered buffer and the empty-network case states
       itself in words (spec: `tui-browser`, main screen)
-- [ ] 8.3 Render the detail pane: Devices with their Senders and Receivers,
-      Senders visually distinct from Receivers; verify a Node with several
-      Devices renders unambiguous attribution and an empty Device still appears
+- [ ] 8.3 Render the detail pane: Devices with their Senders and Receivers always
+      grouped under the owning Device (design D8), Senders visually distinct from
+      Receivers; verify a Node of three Devices renders unambiguous attribution,
+      that grouping holds for a single-Device Node too, and that an empty Device
+      still appears
+- [ ] 8.3a Show each Sender's Flow media type and each Receiver's accepted media
+      types on its row; verify three Senders sharing the label `SDI 1` with
+      `video/raw`, `audio/L24` and `video/smpte291` render distinguishably, and
+      that an unresolved Flow renders as unknown rather than blank
+      (spec: `tui-browser`, resources told apart by media type)
 - [ ] 8.4 Render connection state as active, inactive, or unknown; verify all
       three are distinguishable in a buffer with no colour applied
       (spec: `tui-browser`, state does not rely on colour alone)
@@ -195,11 +202,13 @@ each task names how it is verified.
 
 - [ ] 10.1 Run the full gate: `make fmt`, `make lint`, `make test`; verify no
       warnings and no failures
-- [ ] 10.2 Run against real hardware on the bench, cross-checking the Node list
-      and connection states against `nmosctl.py discover` and
-      `nmosctl.py list <host>`; verify the two agree, and record any divergence
-      as a regression test before fixing it (design: `mdns-sd` interoperability
-      risk)
+- [ ] 10.2 Run against the bench converter (Blackmagic 2110 IP Video Converter
+      3x3G, three Devices of three Senders and three Receivers, advertised on
+      three interfaces); verify the Node appears once, all three Devices are
+      grouped correctly, the Senders sharing the label `SDI 1` are told apart by
+      media type, and the active Senders match what the Connection API reports.
+      Record any divergence as a regression test before fixing it (design:
+      `mdns-sd` interoperability risk)
 - [ ] 10.3 Confirm the read-only contract on the bench: no device changed state
       during the session; verify by reading each Sender's and Receiver's active
       state before and after and finding them identical

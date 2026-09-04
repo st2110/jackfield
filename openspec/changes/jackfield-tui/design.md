@@ -18,10 +18,30 @@ What mDNS advertises as `_nmos-node._tcp` is a Node, not a Device. This design
 and the specs use the specification's meanings throughout — "device" is never
 used loosely for "the box on the network".
 
-The working reference for behaviour is `nmosctl.py` at the repository root: 182
-lines of stdlib Python that shell out to `avahi-browse`, read
-`/x-nmos/node/v1.3`, and read `/x-nmos/connection/v1.1/single`. It is the proof
-the endpoints and the flow work; it is not a structure worth porting.
+The endpoints this change reads are settled and were confirmed against hardware
+on the bench: `/x-nmos/node/v1.3` for the resource tree, and
+`/x-nmos/connection/v1.1/single/{senders|receivers}/{id}/active` for connection
+state.
+
+## What the bench showed
+
+A Blackmagic 2110 IP Video Converter 3x3G, observed at `10.77.1.90:8090`, settles
+the shape of the interface more sharply than argument could:
+
+- It advertises `_nmos-node._tcp` on three interfaces at once, each resolving to
+  the same address and port — deduplication is not a hypothetical requirement.
+- It offers `api_ver=v1.0,v1.1,v1.2,v1.3`, `api_proto=http`, `api_auth=false`.
+- One Node hosts **three Devices** — `SDI 1`, `SDI 2`, `SDI 3`, one per physical
+  port — with three Senders and three Receivers each: nine and nine.
+- **Labels repeat.** All three Senders on `SDI 1` are labelled exactly `SDI 1`.
+  They are told apart only by the media type of the Flow each carries:
+  `video/raw`, `audio/L24`, `video/smpte291`. Receivers on the same box are
+  labelled better (`SDI 1/Audio`), so label quality cannot be relied on either
+  way.
+- Receiver capabilities and Sender flows need not agree: these Receivers
+  advertise `audio/L24` while two of the Senders emit `audio/L16`. Nothing in
+  this read-only change acts on that, but it is a real mismatch a controller must
+  face once it starts making connections.
 
 ## Goals / Non-Goals
 
@@ -84,13 +104,13 @@ against.
 ### D3. mDNS is spoken in-process; no registry
 
 Discovery browses `_nmos-node._tcp` using `mdns-sd`, a pure-Rust responder and
-browser. `nmosctl.py` shells out to `avahi-browse`, which makes it depend on a
-system daemon, on that daemon's output format, and on a `subprocess` round trip
-per scan. None of that survives contact with a controller that must keep a live
-picture of the network.
+browser. The obvious shortcut — shelling out to `avahi-browse` and parsing its
+output — makes the controller depend on a system daemon, on that daemon's output
+format, and on a subprocess round trip per scan. None of that survives contact
+with a controller that must keep a live picture of the network.
 
-Peer-to-peer discovery, with no IS-04 registry, matches how the reference script
-works and how a small plant is actually wired. A registry client is a later
+Peer-to-peer discovery, with no IS-04 registry, matches how a small plant is
+actually wired. A registry client is a later
 change; nothing here forecloses it, because discovery is expressed as a stream of
 appear and depart events, and a registry is simply another producer of those.
 
@@ -153,7 +173,22 @@ per the house rule. A Node failure is a value stored against that Node in the
 inventory — not a log line, not a lost row — because the specs require the
 operator to see it on screen.
 
-### D8. Decisions that outlive this change go to `docs/adr/`
+### D8. Group by Device, and identify every resource by its media type
+
+Senders and Receivers are always grouped under the Device that owns them, never
+flattened into two lists per Node. The bench settles it: a single converter
+presents three Devices, and the Device is the physical port an engineer is
+actually thinking about. Flattening nine Senders into one list throws away the
+only structure that means anything to the person at the rack.
+
+The same observation forces a second rule. Because labels repeat — three Senders
+all called `SDI 1` — a row identified by label alone is unusable. Every Sender row
+SHALL therefore carry the media type of the Flow it sends, and every Receiver row
+the media types it accepts, resolved by the engine rather than assembled in the
+interface. This is why `node-inventory` resolves the Sender-to-Flow reference at
+all: it is not bookkeeping, it is the only thing that tells two rows apart.
+
+### D9. Decisions that outlive this change go to `docs/adr/`
 
 Three of the above are architectural and will be questioned again: the schema
 strategy (D1, D2), discovery without a registry (D3), and the crate split (D4).
@@ -194,9 +229,6 @@ reverting the commits.
 
 ## Open Questions
 
-- Whether Senders and Receivers should be grouped under their Device on screen or
-  presented as two flat lists per Node, when a Node hosts exactly one Device —
-  which is the common case and where the extra level of nesting may cost more
-  than it explains. The specs require only that the attribution be unambiguous;
-  both satisfy them, and the answer is better taken from looking at the built
-  screen against real hardware than from arguing it now.
+None. The one question this design carried — whether to group Senders and
+Receivers under their Device or to flatten them per Node — was settled on the
+bench and is recorded as D9 above.
