@@ -34,7 +34,10 @@ const FORBIDDEN: &[(&str, &str)] = &[
 /// endpoint's response is faithful to the protocol, not a description of a
 /// Sender's state, and lives in `jackfield-nmos` where protocol names belong.
 const ALLOWED: &[&str] = &[
-    // e.g. "ActiveTransportParams" — add with a comment saying why.
+    // IS-05's own transport parameter, `rtp_enabled`. It says whether RTP is
+    // running on one leg of a transport, which is a protocol fact, not a
+    // description of what a Sender is doing — that is `Transmission`.
+    "rtp_enabled",
 ];
 
 fn workspace_root() -> PathBuf {
@@ -80,8 +83,20 @@ fn public_identifier(line: &str) -> Option<&str> {
     if rest.starts_with('(') {
         return None;
     }
+    // Strip modifiers before the item keyword, so `pub async fn sender_is_active`
+    // is seen as `sender_is_active` and not as `async`.
+    let mut rest = rest;
+    loop {
+        let stripped = ["async ", "unsafe ", "extern ", "default "]
+            .iter()
+            .find_map(|kw| rest.strip_prefix(kw));
+        match stripped {
+            Some(next) => rest = next.trim_start(),
+            None => break,
+        }
+    }
     let rest = [
-        "fn ", "struct ", "enum ", "trait ", "const ", "static ", "type ", "mod ",
+        "fn ", "struct ", "enum ", "trait ", "const ", "static ", "type ", "mod ", "union ",
     ]
     .iter()
     .find_map(|kw| rest.strip_prefix(kw))
@@ -154,6 +169,20 @@ fn the_vocabulary_check_catches_a_forbidden_name() {
     assert_eq!(
         public_identifier("pub fn sender_is_active() -> bool {"),
         Some("sender_is_active")
+    );
+    // Modifiers between `pub` and the item keyword once hid the name entirely,
+    // which would have let `pub async fn sender_is_active` through unseen.
+    assert_eq!(
+        public_identifier("pub async fn sender_is_active() {"),
+        Some("sender_is_active")
+    );
+    assert_eq!(
+        public_identifier("pub unsafe fn active() {"),
+        Some("active")
+    );
+    assert_eq!(
+        public_identifier("pub const ACTIVE: u8 = 1;"),
+        Some("ACTIVE")
     );
     assert!(words("sender_is_active").contains(&"active".to_string()));
     assert!(words("ActiveSender").contains(&"active".to_string()));

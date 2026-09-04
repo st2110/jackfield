@@ -147,3 +147,40 @@ impl FixtureNode {
             .collect()
     }
 }
+
+/// A fixture Connection API, serving IS-05 `active` endpoints.
+impl FixtureNode {
+    /// Answer one Sender's `active` endpoint.
+    pub async fn serve_sender_active(&self, version: &str, id: &str, response: ResponseTemplate) {
+        Mock::given(method("GET"))
+            .and(path(format!(
+                "/x-nmos/connection/{version}/single/senders/{id}/active"
+            )))
+            .respond_with(response)
+            .with_priority(OVERRIDE)
+            .mount(&self.server)
+            .await;
+    }
+
+    /// Answer one Receiver's `active` endpoint.
+    pub async fn serve_receiver_active(&self, version: &str, id: &str, response: ResponseTemplate) {
+        Mock::given(method("GET"))
+            .and(path(format!(
+                "/x-nmos/connection/{version}/single/receivers/{id}/active"
+            )))
+            .respond_with(response)
+            .with_priority(OVERRIDE)
+            .mount(&self.server)
+            .await;
+    }
+
+    /// The published `active` response for a Sender.
+    pub fn sender_active_example() -> Value {
+        example(Spec::Is05, "sender-active-get.json")
+    }
+
+    /// The published `active` response for a Receiver.
+    pub fn receiver_active_example() -> Value {
+        example(Spec::Is05, "receiver-active-get-200.json")
+    }
+}

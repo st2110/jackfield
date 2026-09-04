@@ -105,20 +105,20 @@ each task names how it is verified.
 
 ## 5. IS-05 Connection API client (`jackfield-nmos`)
 
-- [ ] 5.1 Write tests first for reading `/single/senders/{id}/active` and
+- [x] 5.1 Write tests first for reading `/single/senders/{id}/active` and
       `/single/receivers/{id}/active` from a `wiremock` fixture; verify the tests
       fail before the client exists
-- [ ] 5.2 Implement the read-only client with `v1.1` then `v1.0` negotiation;
+- [x] 5.2 Implement the read-only client with `v1.1` then `v1.0` negotiation;
       verify an active Sender yields its destination address and port, and an
       inactive one yields no destination
-- [ ] 5.3 Return transport parameters only — connection state comes from IS-04
+- [x] 5.3 Return transport parameters only — connection state comes from IS-04
       (design D9); verify a Node with no reachable Connection API yields transport
       parameters as unknown while its Transmitting/Subscribed states, already read
       from the resource tree, remain valid
       (spec: `node-inventory`, Node without a reachable Connection API)
-- [ ] 5.4 Record a Receiver's subscribed Sender when the active state names one;
+- [x] 5.4 Record a Receiver's subscribed Sender when the active state names one;
       verify the pairing survives a round trip through the fixture
-- [ ] 5.5 Assert by test that the crate exposes no way to write to a device —
+- [x] 5.5 Assert by test that the crate exposes no way to write to a device —
       no `staged` PATCH, no activation; verify the public surface contains no
       such function (this change is read-only by contract)
 

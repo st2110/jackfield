@@ -22,6 +22,7 @@
 )]
 
 mod connection;
+mod connection_api;
 mod device;
 mod error;
 mod flow;
@@ -35,6 +36,11 @@ mod source;
 mod version;
 
 pub use connection::{Reception, Transmission};
+pub use connection_api::{
+    CONNECTION_CONTROL_URN, ConnectionApiClient, ConnectionApiClientBuilder, ConnectionApiError,
+    ReceiverLeg, ReceiverTransport, SUPPORTED_CONNECTION_VERSIONS, SenderLeg, SenderTransport,
+    StreamAddress,
+};
 pub use device::{Control, Device};
 pub use error::ParseError;
 pub use flow::{Component, ComponentName, DidSdid, Flow, FlowCore, InterlaceMode, VideoCore};
