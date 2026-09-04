@@ -20,6 +20,9 @@ jackfield-nmos = { path = "crates/jackfield-nmos" }
 jackfield-engine = { path = "crates/jackfield-engine" }
 jackfield-tui = { path = "crates/jackfield-tui" }
 
+# Test-only: reading the vendored AMWA schemas and examples.
+serde_json = "1.0.151"
+
 # A controller that drives live 2110 equipment must return errors, not abort.
 # See AGENTS.md, "No panics in production code".
 [workspace.lints.clippy]

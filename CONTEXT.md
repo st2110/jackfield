@@ -72,6 +72,13 @@ A connection the controller can see but cannot pin down: a Receiver naming a
 Sender that has not been discovered, or a stream whose address matches more than
 one Sender. Shown as such, never guessed at and never silently dropped.
 
+**Pending**:
+A fact the controller has not read yet but expects to — most often a
+Transmitting Sender's destination, which arrives on the slower of the two fetch
+clocks. Distinct from absent: a Sender whose destination is pending is not a
+Sender going nowhere.
+_Avoid_: none, empty, blank
+
 **Unknown state**:
 A Sender's or Receiver's connection state that has not been read yet, or could
 not be read. Distinct from Idle and from Unsubscribed, which are positive

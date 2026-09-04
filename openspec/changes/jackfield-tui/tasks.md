@@ -27,30 +27,30 @@ each task names how it is verified.
 
 ## 2. Vendored contract and architecture decisions
 
-- [ ] 2.1 Vendor the IS-04 `v1.3.x` JSON Schemas into
+- [x] 2.1 Vendor the IS-04 `v1.3.x` JSON Schemas into
       `schemas/is-04/v1.3/` byte-for-byte, with a `PROVENANCE.md` recording the
       upstream repository, tag, and commit, and the upstream Apache-2.0 licence
       alongside; verify every `$ref` in the vendored set resolves to a vendored
       file (a test walks the directory and fails on a dangling reference)
-- [ ] 2.2 Vendor the IS-05 `v1.1.x` JSON Schemas into `schemas/is-05/v1.1/` on
+- [x] 2.2 Vendor the IS-05 `v1.1.x` JSON Schemas into `schemas/is-05/v1.1/` on
       the same terms; verify with the same reference-resolution test
-- [ ] 2.3 Vendor the published resource examples used by the round-trip tests
+- [x] 2.3 Vendor the published resource examples used by the round-trip tests
       into `schemas/examples/`; verify the test harness can enumerate them and
       that the set is non-empty for every resource type this change consumes
-- [ ] 2.4 Write `docs/adr/0001-nmos-types-by-hand-schemas-as-validators.md`
+- [x] 2.4 Write `docs/adr/0001-nmos-types-by-hand-schemas-as-validators.md`
       (design D1, D2); verify it states the draft-04 constraint, the rejected
       generator alternative, and the two-directional validation rule
-- [ ] 2.5 Write `docs/adr/0002-peer-to-peer-mdns-discovery.md` (design D3);
+- [x] 2.5 Write `docs/adr/0002-peer-to-peer-mdns-discovery.md` (design D3);
       verify it records why no registry client and why no `avahi-browse`
-- [ ] 2.6 Write `docs/adr/0003-crate-split-engine-owns-state.md` (design D4);
+- [x] 2.6 Write `docs/adr/0003-crate-split-engine-owns-state.md` (design D4);
       verify it records the channel seam and what each crate may not know
-- [ ] 2.7 Write `docs/adr/0004-connection-vocabulary-and-graph.md` (design D10);
+- [x] 2.7 Write `docs/adr/0004-connection-vocabulary-and-graph.md` (design D10);
       verify it records why Transmitting is not "connected", why the graph is
       network-wide, and why unresolved edges are surfaced rather than dropped
-- [ ] 2.8 Write `docs/adr/0005-two-tier-fetch.md` (design D9); verify it records
+- [x] 2.8 Write `docs/adr/0005-two-tier-fetch.md` (design D9); verify it records
       that IS-04 carries connection state, that this hardware leaves the pairing
       identifiers null, and why the transport pass has a periodic floor
-- [ ] 2.9 Keep `CONTEXT.md` current as terms settle; verify every term used in
+- [x] 2.9 Keep `CONTEXT.md` current as terms settle; verify every term used in
       the specs and in public type names appears there, and that no forbidden
       synonym (`active` for a Sender, `device` for a Node, `input`/`output`)
       appears in the crate's public API
