@@ -20,6 +20,7 @@
 
 mod discovery;
 mod identity;
+mod inventory;
 
 pub use discovery::mdns::{DiscoveryError, MdnsDiscovery};
 pub use discovery::{
@@ -27,3 +28,7 @@ pub use discovery::{
     NODE_SERVICE_TYPE, Subscription, VersionCounters,
 };
 pub use identity::{Identified, Identities, NodeKey};
+pub use inventory::{
+    DeviceView, Inventory, KnownNode, Media, NodeContents, NodeState, Orphan, OrphanKind, Pairing,
+    ReceiverView, ResourceRef, SenderView, Transport,
+};

@@ -156,11 +156,11 @@ each task names how it is verified.
 
 ## 7. Inventory (`jackfield-engine`)
 
-- [ ] 7.1 Model the inventory: Nodes keyed by identifier with a set of endpoints,
+- [x] 7.1 Model the inventory: Nodes keyed by identifier with a set of endpoints,
       each either fetched, still loading, or failed with a reason; verify state
       transitions with unit tests over a fabricated fetcher, with no network, and
       that a Node surviving on its second endpoint is not reported as failed
-- [ ] 7.2 Resolve references — Senders and Receivers to their Device, Senders to
+- [x] 7.2 Resolve references — Senders and Receivers to their Device, Senders to
       their Flow; verify a dangling `flow_id` yields an unresolved marker while
       the rest of the tree stays usable (spec: `node-inventory`, dangling
       reference)
@@ -168,7 +168,7 @@ each task names how it is verified.
       sequential, each with its own timeout; verify at most eight run at once
       with twenty Nodes discovered, and that one stalled Node delays no other
       (spec: `node-inventory`, fetching is bounded and isolated)
-- [ ] 7.4 Implement refresh replacing a Node's tree; verify a Sender removed at
+- [x] 7.4 Implement refresh replacing a Node's tree; verify a Sender removed at
       the Node disappears on refresh, and a previously failed Node becomes
       browsable when it starts answering
 - [ ] 7.4a Drive re-reads from the version counters: re-read only the collections
@@ -182,12 +182,12 @@ each task names how it is verified.
       per-resource traffic between passes, and that resources not yet covered
       report their transport parameters as pending rather than absent
       (spec: `node-inventory`, transport details read separately)
-- [ ] 7.4c Build the network-wide connection graph: pair Receivers to Senders by
+- [x] 7.4c Build the network-wide connection graph: pair Receivers to Senders by
       reported identifier, falling back to matching stream address and port;
       verify a Sender taken by three Receivers across two Nodes carries all
       three, and a Transmitting Sender with no takers carries an empty set and is
       never reported as connected
-- [ ] 7.4d Represent unresolvable pairings explicitly — unknown Sender, and
+- [x] 7.4d Represent unresolvable pairings explicitly — unknown Sender, and
       ambiguous with candidates named; verify a Receiver naming an undiscovered
       Sender stays Subscribed rather than becoming Unsubscribed, that two Senders
       sharing a multicast address yield an ambiguous pairing with neither chosen,
@@ -196,7 +196,7 @@ each task names how it is verified.
 - [ ] 7.5 Publish inventory snapshots on a channel and accept commands on
       another (design D4); verify a command to refresh a Node reaches the
       fetcher and a resulting snapshot reaches the subscriber
-- [ ] 7.6 Assert by test that nothing is written to disk: run a full discovery
+- [x] 7.6 Assert by test that nothing is written to disk: run a full discovery
       and fetch cycle in a temporary directory and verify no file was created or
       modified (spec: `node-inventory`, state held in memory only)
 
