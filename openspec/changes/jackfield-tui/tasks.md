@@ -124,33 +124,33 @@ each task names how it is verified.
 
 ## 6. Discovery (`jackfield-engine`)
 
-- [ ] 6.1 Define discovery as a stream of appear and depart events behind an
+- [x] 6.1 Define discovery as a stream of appear and depart events behind an
       interface the tests can drive with fabricated advertisements; verify a
       fabricated advertisement produces an appear event without any network
-- [ ] 6.2 Implement the `mdns-sd` browser for `_nmos-node._tcp`; verify against a
+- [x] 6.2 Implement the `mdns-sd` browser for `_nmos-node._tcp`; verify against a
       locally registered service that it is discovered, and that discovery works
       with no system mDNS daemon installed (spec: `node-discovery`)
-- [ ] 6.3 Parse the TXT records (`api_proto`, `api_ver`, `api_auth`) with IS-04
+- [x] 6.3 Parse the TXT records (`api_proto`, `api_ver`, `api_auth`) with IS-04
       defaults for absent records; verify `api_ver=v1.0,v1.1,v1.2,v1.3` yields all
       four, an absent `api_proto` yields the default rather than a dropped
       advertisement, and `api_auth=true` marks the Node as requiring authorization
-- [ ] 6.3a Parse the version counters (`ver_slf`, `ver_dvc`, `ver_snd`,
+- [x] 6.3a Parse the version counters (`ver_slf`, `ver_dvc`, `ver_snd`,
       `ver_rcv`, `ver_flw`, `ver_src`) and emit a change event when a counter
       moves; verify an absent counter is reported absent and not as zero, and
       that a re-advertisement with an unchanged counter emits nothing
       (spec: `node-discovery`, version counters)
-- [ ] 6.4 Key Nodes two-stage: endpoint provisionally, `self.id` once fetched
+- [x] 6.4 Key Nodes two-stage: endpoint provisionally, `self.id` once fetched
       (design D8); verify one Node advertised on three interfaces appears once,
       a Node answering at two addresses with one identifier collapses to one row
       without flickering as two, and two Nodes on one host with different ports
       stay distinct
-- [ ] 6.4a Accept IPv4 and IPv6 advertisements, holding both as endpoints and
+- [x] 6.4a Accept IPv4 and IPv6 advertisements, holding both as endpoints and
       preferring IPv4 for requests; verify an IPv6-only Node is discovered and
       used, and a dual-stack Node is addressed over IPv4
       (spec: `node-discovery`, both address families)
-- [ ] 6.5 Handle departure and re-appearance; verify a goodbye produces a depart
+- [x] 6.5 Handle departure and re-appearance; verify a goodbye produces a depart
       event and a subsequent advertisement produces a fresh appear event
-- [ ] 6.6 Test malformed and hostile advertisements: no address, no port,
+- [x] 6.6 Test malformed and hostile advertisements: no address, no port,
       oversized TXT, invalid UTF-8 in TXT; verify each is ignored, discovery
       keeps running, and nothing panics
 
