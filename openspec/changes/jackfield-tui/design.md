@@ -56,6 +56,36 @@ the shape of the interface more sharply than argument could:
   is the mechanism the specification provides for noticing change without
   polling.
 
+## What the bench confirmed once it was built
+
+The finished controller was run against the same Blackmagic converter, from a
+host on the plant, on 2026-09-04. Everything above held:
+
+- The Node appears **once**, though it advertises on three interfaces.
+- Its three Devices are grouped correctly, each with three Senders and three
+  Receivers.
+- The three Senders labelled `SDI 1` are told apart by media type, exactly as
+  the interface depends on.
+- Only `SDI 1` is live, and its three Senders' destinations —
+  `239.255.0.190:16384`, `239.255.1.190:16386`, `239.255.2.190:16388` — read
+  from the Connection API match what the device reports directly.
+- **IS-04 `active` agrees with IS-05 `master_enable` on all eighteen
+  resources**, with no exceptions. This is the observation D9 rests on, and it
+  now rests on the finished code rather than on a probe script.
+- Each of those three Senders is transmitting with nothing taking its stream,
+  which the interface says in those words.
+
+The read-only contract was checked the way `tasks.md` asks: every Sender's and
+Receiver's state was read before and after the session and found identical. No
+device changed state.
+
+One presentational consequence worth naming. An Idle Sender on this converter
+still carries a configured `destination_ip`, but with `rtp_enabled` false; the
+controller reports it as having no destination. That is deliberate — a Sender
+with RTP off is not putting anything on that address, and treating the address
+as live would let a Receiver be paired to a silent Sender — but it does mean the
+screen does not show what an Idle Sender *would* send to.
+
 ## Goals / Non-Goals
 
 **Goals:**

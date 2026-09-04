@@ -265,15 +265,15 @@ each task names how it is verified.
 
 ## 10. Verification
 
-- [ ] 10.1 Run the full gate: `make fmt`, `make lint`, `make test`; verify no
+- [x] 10.1 Run the full gate: `make fmt`, `make lint`, `make test`; verify no
       warnings and no failures
-- [ ] 10.2 Run against the bench converter (Blackmagic 2110 IP Video Converter
+- [x] 10.2 Run against the bench converter (Blackmagic 2110 IP Video Converter
       3x3G, three Devices of three Senders and three Receivers, advertised on
       three interfaces); verify the Node appears once, all three Devices are
       grouped correctly, the Senders sharing the label `SDI 1` are told apart by
       media type, and the active Senders match what the Connection API reports.
       Record any divergence as a regression test before fixing it (design:
       `mdns-sd` interoperability risk)
-- [ ] 10.3 Confirm the read-only contract on the bench: no device changed state
+- [x] 10.3 Confirm the read-only contract on the bench: no device changed state
       during the session; verify by reading each Sender's and Receiver's active
       state before and after and finding them identical

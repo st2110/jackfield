@@ -211,19 +211,70 @@ pub fn describe(snapshot: &Snapshot) -> String {
             out.push_str(&format!("    Device {}\n", device.device.core.label));
             for sender in &device.senders {
                 out.push_str(&format!(
-                    "        Sender {} [{}] {}\n",
-                    sender.sender.core.label, sender.media, sender.transmission
+                    "        Sender {} [{}] {} {} {}\n",
+                    sender.sender.core.label,
+                    sender.media,
+                    sender.transmission,
+                    destination(&sender.transport),
+                    takers(sender),
                 ));
             }
             for receiver in &device.receivers {
                 out.push_str(&format!(
-                    "        Receiver {} {}\n",
-                    receiver.receiver.core.label, receiver.reception
+                    "        Receiver {} {}{}\n",
+                    receiver.receiver.core.label,
+                    receiver.reception,
+                    pairing(&receiver.pairing),
                 ));
             }
         }
     }
     out
+}
+
+/// Where a Sender sends, in one short phrase.
+fn destination(transport: &jackfield_engine::Transport) -> String {
+    match transport {
+        jackfield_engine::Transport::Pending => "(destination pending)".to_owned(),
+        jackfield_engine::Transport::Unavailable { .. } => "(destination unknown)".to_owned(),
+        jackfield_engine::Transport::Known { streams } if streams.is_empty() => {
+            "(no destination)".to_owned()
+        }
+        jackfield_engine::Transport::Known { streams } => {
+            let shown: Vec<String> = streams.iter().map(ToString::to_string).collect();
+            format!("to {}", shown.join(" + "))
+        }
+    }
+}
+
+/// Who takes a Sender's stream, in one short phrase.
+fn takers(sender: &jackfield_engine::SenderView) -> String {
+    if sender.transport.is_pending() {
+        "(receivers not yet known)".to_owned()
+    } else if sender.taken_by.is_empty() {
+        "taken by nobody".to_owned()
+    } else {
+        format!("taken by {}", sender.taken_by.len())
+    }
+}
+
+/// Which Sender feeds a Receiver, in one short phrase.
+fn pairing(pairing: &jackfield_engine::Pairing) -> String {
+    match pairing {
+        jackfield_engine::Pairing::None => String::new(),
+        jackfield_engine::Pairing::Pending => " (sender not yet known)".to_owned(),
+        jackfield_engine::Pairing::Resolved(sender) => format!(" from {sender}"),
+        jackfield_engine::Pairing::UnknownSender { sender_id } => {
+            format!(" from an unknown sender {sender_id}")
+        }
+        jackfield_engine::Pairing::Ambiguous { candidates } => {
+            let named: Vec<String> = candidates.iter().map(ToString::to_string).collect();
+            format!(" ambiguous between {}", named.join(" and "))
+        }
+        jackfield_engine::Pairing::Unmatched => {
+            " from a sender this controller has not found".to_owned()
+        }
+    }
 }
 
 /// Send the engine home.
