@@ -42,6 +42,40 @@ translation catalogs, and their test fixtures.
 When writing, reviewing, or refactoring Rust code — including dependency choices and
 project structure — invoke the `rust-skills` skill first and follow its rules.
 
+### Testing
+
+- **Tests come first.** Write the test before the code it tests. A change that adds
+  behaviour without a test that fails before it and passes after is not finished.
+- **The happy path is not coverage.** Every test suite must also exercise the edges:
+  empty and maximum-size input, zero and boundary values, malformed and hostile input,
+  timeouts, disconnects, and concurrent access. Use `proptest` where the input space is
+  large enough that hand-picked cases will miss things.
+- **Every bug gets a regression test.** When diagnosing a problem, the first artifact is
+  a test that reproduces it and fails. Fix the code only after that test is red. Never
+  delete or weaken such a test; it is the proof the bug cannot come back.
+
+### No panics in production code
+
+`unwrap()`, `expect()`, `panic!()`, `todo!()`, and slice indexing that can go out of
+bounds are forbidden outside tests — including in the binary entry points. A controller
+that operates live 2110 devices must return an error, not abort. Propagate with `?`.
+
+Enforce it with clippy rather than review:
+
+```toml
+[workspace.lints.clippy]
+unwrap_used      = "deny"
+expect_used      = "deny"
+panic            = "deny"
+indexing_slicing = "deny"
+todo             = "deny"
+unimplemented    = "deny"
+correctness      = "deny"
+```
+
+Relax these in `#[cfg(test)]` code only. Do not add the per-crate
+`unwrap_used = "allow"` override for binaries that `rust-skills` suggests.
+
 ### Working on tickets
 
 Do not work on a ticket in the main checkout. For each ticket, create a dedicated
