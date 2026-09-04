@@ -42,10 +42,10 @@ fn collect_refs(value: &Value, out: &mut BTreeSet<String>) {
     match value {
         Value::Object(map) => {
             for (key, child) in map {
-                if key == "$ref" {
-                    if let Value::String(target) = child {
-                        out.insert(target.clone());
-                    }
+                if key == "$ref"
+                    && let Value::String(target) = child
+                {
+                    out.insert(target.clone());
                 }
                 collect_refs(child, out);
             }

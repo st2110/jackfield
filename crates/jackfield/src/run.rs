@@ -122,10 +122,10 @@ pub async fn drive(handle: EngineHandle) -> Result<Outcome> {
                     // from inside, so leave rather than hang.
                     return Ok(Outcome::Quit);
                 };
-                if let Some(action) = action_for(key) {
-                    if act(&mut app, &handle, action).await == Some(Outcome::Quit) {
-                        return Ok(Outcome::Quit);
-                    }
+                if let Some(action) = action_for(key)
+                    && act(&mut app, &handle, action).await == Some(Outcome::Quit)
+                {
+                    return Ok(Outcome::Quit);
                 }
             }
 
