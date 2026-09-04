@@ -202,50 +202,50 @@ each task names how it is verified.
 
 ## 8. Terminal interface (`jackfield-tui`)
 
-- [ ] 8.1 Establish rendering tests against `ratatui`'s test backend, driven by a
+- [x] 8.1 Establish rendering tests against `ratatui`'s test backend, driven by a
       fabricated snapshot with no engine and no network; verify a snapshot
       renders deterministically into a buffer the test can assert on
-- [ ] 8.2 Render the left pane: the Node list with label and address, including
+- [x] 8.2 Render the left pane: the Node list with label and address, including
       the loading, failed, and departed presentations; verify each state is
       distinguishable in the rendered buffer and the empty-network case states
       itself in words (spec: `tui-browser`, main screen)
-- [ ] 8.3 Render the detail pane: Devices with their Senders and Receivers always
+- [x] 8.3 Render the detail pane: Devices with their Senders and Receivers always
       grouped under the owning Device (design D8), Senders visually distinct from
       Receivers; verify a Node of three Devices renders unambiguous attribution,
       that grouping holds for a single-Device Node too, and that an empty Device
       still appears
-- [ ] 8.3a Show each Sender's Flow media type and each Receiver's accepted media
+- [x] 8.3a Show each Sender's Flow media type and each Receiver's accepted media
       types on its row; verify three Senders sharing the label `SDI 1` with
       `video/raw`, `audio/L24` and `video/smpte291` render distinguishably, and
       that an unresolved Flow renders as unknown rather than blank
       (spec: `tui-browser`, resources told apart by media type)
-- [ ] 8.4 Render connection state as Transmitting/Idle for Senders and
+- [x] 8.4 Render connection state as Transmitting/Idle for Senders and
       Subscribed/Unsubscribed for Receivers, plus unknown; verify all states are
       distinguishable in a buffer with no colour applied, that no Sender is
       labelled "connected", and that a Transmitting Sender whose transport is not
       yet read shows its destination as pending rather than blank
       (spec: `tui-browser`, state does not rely on colour alone)
-- [ ] 8.4a Render a Sender's Receiver count and its expanded list, each entry
+- [x] 8.4a Render a Sender's Receiver count and its expanded list, each entry
       naming the Node and Device; verify a Sender taken by three Receivers across
       two Nodes shows the count and expands correctly, and that a Transmitting
       Sender with no takers says so distinctly from one whose takers are not yet
       known (spec: `tui-browser`, a Sender shows who is taking its stream)
-- [ ] 8.4b Render unresolved pairings — subscribed to an unknown Sender, and
+- [x] 8.4b Render unresolved pairings — subscribed to an unknown Sender, and
       ambiguous with candidates; verify neither renders as Unsubscribed and that
       resolution is visible once the missing Node appears
-- [ ] 8.4c Keep list order deterministic and stable under the selection; verify a
+- [x] 8.4c Keep list order deterministic and stable under the selection; verify a
       Node appearing above the selected one leaves the selection on the same Node,
       and that a Node with an empty label falls back to hostname then address
-- [ ] 8.5 Implement the keyboard model — move, enter, back, refresh, quit — and
+- [x] 8.5 Implement the keyboard model — move, enter, back, refresh, quit — and
       the on-screen key hints; verify each binding against the test backend,
       including that back restores the previous selection
-- [ ] 8.6 Implement the terminal guard restoring raw mode, the alternate screen,
+- [x] 8.6 Implement the terminal guard restoring raw mode, the alternate screen,
       and the cursor on `Drop`; verify restoration runs on normal exit and on
       panic unwind
-- [ ] 8.7 Handle layout edges: resize, labels longer than the pane, more Nodes
+- [x] 8.7 Handle layout edges: resize, labels longer than the pane, more Nodes
       than fit; verify truncation and scrolling keep the layout intact and the
       selected Node visible
-- [ ] 8.8 Verify by test that the crate depends on no HTTP or mDNS crate and
+- [x] 8.8 Verify by test that the crate depends on no HTTP or mDNS crate and
       performs no network call — the boundary from design D4 is enforced, not
       merely intended
 

@@ -9,6 +9,12 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+jackfield-engine.workspace = true
+jackfield-nmos.workspace = true
+ratatui.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+ratatui.workspace = true

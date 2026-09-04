@@ -18,7 +18,6 @@ authors = ["Flussonic"]
 [workspace.dependencies]
 jackfield-nmos = { path = "crates/jackfield-nmos" }
 jackfield-engine = { path = "crates/jackfield-engine" }
-jackfield-tui = { path = "crates/jackfield-tui" }
 
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.20"
@@ -28,6 +27,11 @@ reqwest = { version = "0.13.4", default-features = false, features = ["rustls", 
 tokio = { version = "1.53.1", features = ["rt", "time", "macros"] }
 mdns-sd = "0.21.1"
 tracing = "0.1.44"
+
+# Pinned by the workspace MSRV of 1.85: ratatui 0.30 needs 1.88. Crossterm is
+# not a direct dependency — `ratatui::crossterm` re-exports the version it was
+# built against, and two versions of it cannot exchange events.
+ratatui = "0.29.0"
 
 # Test-only: the validators applied to the vendored AMWA schemas, and the
 # fixture Nodes the clients are exercised against.
