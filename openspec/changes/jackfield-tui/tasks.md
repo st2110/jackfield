@@ -57,30 +57,30 @@ each task names how it is verified.
 
 ## 3. Resource model (`jackfield-nmos`)
 
-- [ ] 3.1 Write the schema-validation test harness first: load a vendored schema
+- [x] 3.1 Write the schema-validation test harness first: load a vendored schema
       with the `jsonschema` crate, assert draft-04 support, and prove the harness
       fails on a deliberately wrong document; verify the harness's own negative
       test passes
-- [ ] 3.2 Model the core resource fields shared by every resource (`id`,
+- [x] 3.2 Model the core resource fields shared by every resource (`id`,
       `version`, `label`, `description`, `tags`) as a `ResourceCore`; verify
       every vendored example of every resource type parses and re-serializes to
       a document validating against `resource_core.json`
-- [ ] 3.3 Model `Node`, `Device`, `Sender`, `Receiver`, `Source`; verify each
+- [x] 3.3 Model `Node`, `Device`, `Sender`, `Receiver`, `Source`; verify each
       vendored example parses into its type and each serialization validates
       against its schema
-- [ ] 3.4 Model `Flow` as a Rust enum over the specification's variants (video
+- [x] 3.4 Model `Flow` as a Rust enum over the specification's variants (video
       raw and coded, audio raw and coded, data, SDI ancillary data, mux); verify
       every vendored flow example parses into the correct variant and the wrong
       variant is never selected
-- [ ] 3.5 Model `Receiver` capability variants (video, audio, data, mux) as an
+- [x] 3.5 Model `Receiver` capability variants (video, audio, data, mux) as an
       enum on the same terms; verify with the vendored receiver examples
-- [ ] 3.6 Make every resource tolerate unknown fields; verify a test that adds a
+- [x] 3.6 Make every resource tolerate unknown fields; verify a test that adds a
       vendor-specific field to each example still parses and that the field's
       presence changes nothing else (spec: `node-inventory`, unknown fields)
-- [ ] 3.7 Property test the identifier and version types against malformed input
+- [x] 3.7 Property test the identifier and version types against malformed input
       (empty, oversized, non-UUID, non-numeric version); verify `proptest` finds
       no input that panics — the parse returns an error for every rejection
-- [ ] 3.8 Model the `subscription` object on Senders and Receivers, and map it to
+- [x] 3.8 Model the `subscription` object on Senders and Receivers, and map it to
       the domain states `Transmitting`/`Idle` and `Subscribed`/`Unsubscribed`
       (design D10, `CONTEXT.md`); verify a Sender with `{"active": true,
       "receiver_id": null}` maps to Transmitting with no pairing, and that no
