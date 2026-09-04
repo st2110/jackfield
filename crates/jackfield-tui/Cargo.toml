@@ -1,0 +1,22 @@
+[package]
+name = "jackfield-tui"
+description = "Terminal interface rendering an inventory snapshot"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+jackfield-engine.workspace = true
+jackfield-nmos.workspace = true
+ratatui.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+ratatui.workspace = true

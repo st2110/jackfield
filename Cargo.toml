@@ -1,0 +1,66 @@
+[workspace]
+members = [
+    "crates/jackfield-nmos",
+    "crates/jackfield-engine",
+    "crates/jackfield-tui",
+    "crates/jackfield",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "Apache-2.0"
+repository = "https://github.com/st2110/jackfield"
+authors = ["Flussonic"]
+
+[workspace.dependencies]
+jackfield-nmos = { path = "crates/jackfield-nmos" }
+jackfield-engine = { path = "crates/jackfield-engine" }
+jackfield-tui = { path = "crates/jackfield-tui" }
+
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.20"
+
+serde_json = "1.0.151"
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json", "http2", "charset"] }
+tokio = { version = "1.53.1", features = ["rt", "time", "macros"] }
+mdns-sd = "0.21.1"
+tracing = "0.1.44"
+
+# Crossterm is deliberately not a direct dependency: `ratatui::crossterm`
+# re-exports the version ratatui was built against, and two versions of it
+# cannot exchange events.
+ratatui = "0.30.2"
+anyhow = "1.0.104"
+clap = { version = "4.6.6", features = ["derive"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+# Test-only: the validators applied to the vendored AMWA schemas, and the
+# fixture Nodes the clients are exercised against.
+jsonschema = { version = "0.53.0", default-features = false }
+proptest = "1.11.0"
+wiremock = "0.6.5"
+
+# A controller that drives live 2110 equipment must return errors, not abort.
+# See AGENTS.md, "No panics in production code".
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+todo = "deny"
+unimplemented = "deny"
+correctness = "deny"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+# Deliberately not `panic = "abort"`: the terminal guard restores the screen
+# from its `Drop`, which only runs while unwinding.
+
+[profile.dev.package."*"]
+opt-level = 3

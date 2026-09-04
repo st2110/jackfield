@@ -1,2 +1,5 @@
 # Agent worktrees (one per ticket, see AGENTS.md)
 .agents/worktrees/
+
+# Cargo build output
+/target/

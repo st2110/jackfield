@@ -1,0 +1,60 @@
+schema: spec-driven
+
+# Project context — shown to the AI when creating any artifact.
+# HARD LIMIT: 50KB. Above it openspec drops the whole `context` field with a
+# console warning, and artifacts get generated with no project context at all.
+context: |
+  Project: jackfield — an NMOS controller for SMPTE ST 2110 networks, written in
+  Rust. It discovers NMOS Nodes on the local network and configures them, running
+  either as a terminal UI (ratatui) or as a web server from the same binary. It is
+  meant to replace a vendor controller appliance for operating a 2110 plant.
+
+  Open source, Apache-2.0, mirrored publicly at github.com/st2110/jackfield.
+
+  --- LANGUAGE ---
+  Everything written into the repository is in English: code, comments,
+  identifiers, documentation, commit messages, change artifacts, log and error
+  strings, UI copy. The only exception is localization data. This holds even when
+  the conversation with the user is in another language.
+
+  --- GLOSSARY ---
+  CONTEXT.md at the repository root is the canonical glossary. Read it before
+  naming anything, and add new terms there rather than here. The core, repeated
+  below only so it is never missing:
+
+  IS-04 containment is strict and its words are used exactly. A **Node** is one
+  logical host, advertised over mDNS; it holds **Devices**; a Device holds
+  **Senders** and **Receivers**; a Sender carries a **Flow**, which comes from a
+  **Source**. Never call a Node a "device".
+
+  Connection has three vocabularies, not one. A Sender is **Transmitting** or
+  **Idle** — transmitting says nothing about whether anyone listens. A Receiver is
+  **Subscribed** or **Unsubscribed**. The word *connected* describes the pair.
+  State that has not been read is **Unknown**, which is not the same as Idle or
+  Unsubscribed.
+
+  --- STANDARDS (see AGENTS.md, symlinked as CLAUDE.md) ---
+  Rust: async with tokio; invoke the `rust-skills` skill before writing or
+  reviewing Rust. No panics in production code — `unwrap`, `expect`, `panic!`,
+  `todo!` and fallible indexing are denied by workspace clippy lints outside
+  tests, including in binary entry points; propagate with `?`. Errors: thiserror
+  in libraries, anyhow in the binary.
+
+  Tests come first: write the failing test before the code. The happy path is not
+  coverage — exercise empty and maximum input, boundary values, malformed and
+  hostile input, timeouts, disconnects, concurrency. Every bug gets a regression
+  test that is red before the fix and is never weakened afterwards.
+
+  Work on a ticket happens in a git worktree under `.agents/worktrees/`, on its
+  own branch. Commit messages: at most three lines of description, ticket
+  reference on the last line.
+
+  Technical decisions that outlive a single change go to `docs/adr/`.
+
+  --- SPECIFICATIONS ---
+  IS-04 Discovery and Registration (Node API), IS-05 Device Connection Management
+  (Connection API). AMWA publishes these as RAML plus JSON Schema draft-04 — there
+  is no official OpenAPI. Rust types are written by hand; the vendored schemas are
+  used as validators in the test suite, in both directions. Discovery is
+  peer-to-peer over mDNS with no registry, spoken in-process via `mdns-sd` — never
+  by shelling out to `avahi-browse`. See docs/adr/.
