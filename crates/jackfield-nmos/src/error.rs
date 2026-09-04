@@ -31,4 +31,8 @@ pub enum ParseError {
     /// The text is not a media type of the form `type/subtype`.
     #[error("not a media type")]
     MediaType,
+
+    /// The text is not an API version of the form `v<major>.<minor>`.
+    #[error("not an NMOS API version")]
+    ApiVersion,
 }

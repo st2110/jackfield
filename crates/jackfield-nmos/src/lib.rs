@@ -27,10 +27,12 @@ mod error;
 mod flow;
 mod media;
 mod node;
+mod node_api;
 mod receiver;
 mod resource;
 mod sender;
 mod source;
+mod version;
 
 pub use connection::{Reception, Transmission};
 pub use device::{Control, Device};
@@ -40,7 +42,11 @@ pub use media::{Format, MediaType, Rate};
 pub use node::{
     ApiEndpoint, AttachedNetworkDevice, Clock, Interface, Node, NodeApi, Protocol, Service,
 };
+pub use node_api::{
+    NodeApiClient, NodeApiClientBuilder, NodeApiError, ResourceTree, SUPPORTED_VERSIONS,
+};
 pub use receiver::{MediaCaps, Receiver, ReceiverCaps, ReceiverSubscription};
 pub use resource::{Capabilities, ResourceCore, ResourceId, Tags, Version};
 pub use sender::{Sender, SenderSubscription};
 pub use source::{Channel, Source, SourceCore};
+pub use version::ApiVersion;

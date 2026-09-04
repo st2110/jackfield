@@ -24,10 +24,14 @@ serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.20"
 
 serde_json = "1.0.151"
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "json", "http2", "charset"] }
+tokio = { version = "1.53.1", features = ["rt", "time", "macros"] }
 
-# Test-only: the validators applied to the vendored AMWA schemas.
+# Test-only: the validators applied to the vendored AMWA schemas, and the
+# fixture Nodes the clients are exercised against.
 jsonschema = { version = "0.53.0", default-features = false }
 proptest = "1.11.0"
+wiremock = "0.6.5"
 
 # A controller that drives live 2110 equipment must return errors, not abort.
 # See AGENTS.md, "No panics in production code".

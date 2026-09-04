@@ -88,18 +88,18 @@ each task names how it is verified.
 
 ## 4. IS-04 Node API client (`jackfield-nmos`)
 
-- [ ] 4.1 Write the client's tests first against `wiremock`: a fixture Node
+- [x] 4.1 Write the client's tests first against `wiremock`: a fixture Node
       serving `self`, `devices`, `senders`, `receivers`, `flows`, `sources`;
       verify the fixture is exercised by a failing test before the client exists
-- [ ] 4.2 Implement the version-negotiating base URL (`v1.3` then `v1.2`,
+- [x] 4.2 Implement the version-negotiating base URL (`v1.3` then `v1.2`,
       design D6); verify a Node offering only `v1.2` is addressed at the `v1.2`
       prefix and a Node offering neither yields an unsupported-version error
       naming what was offered
-- [ ] 4.3 Implement fetching the six collections with per-request and connect
+- [x] 4.3 Implement fetching the six collections with per-request and connect
       timeouts; verify against the fixture that a complete tree is returned, and
       that a Node exposing no Devices returns an empty list rather than an error
       (spec: `node-inventory`, Node exposing nothing)
-- [ ] 4.4 Cover the failure modes with tests: connection refused, timeout, HTTP
+- [x] 4.4 Cover the failure modes with tests: connection refused, timeout, HTTP
       500, HTML instead of JSON, truncated JSON; verify each produces a distinct,
       named error and none panics (spec: `node-inventory`, unreachable Node)
 

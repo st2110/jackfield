@@ -9,6 +9,8 @@
 
 #![allow(dead_code)]
 
+pub mod fixture;
+
 use std::path::{Path, PathBuf};
 
 use jsonschema::{Draft, Retrieve, Uri, Validator};
