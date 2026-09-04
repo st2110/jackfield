@@ -224,3 +224,51 @@ pub fn render(app: &mut jackfield_tui::App, width: u16, height: u16) -> Vec<Stri
 pub fn screen(app: &mut jackfield_tui::App, width: u16, height: u16) -> String {
     render(app, width, height).join("\n")
 }
+
+/// A Node shaped like the bench converter: three Devices, each with three
+/// Senders sharing one label and three Receivers. Forty-odd rows, which is more
+/// than a terminal shows at once — the case navigation exists for.
+pub fn bench_node() -> KnownNode {
+    let media = ["video/raw", "audio/L24", "video/smpte291"];
+    let devices: Vec<DeviceView> = (0..3u16)
+        .map(|port| {
+            let label = format!("SDI {}", port + 1);
+            let senders: Vec<SenderView> = media
+                .iter()
+                .enumerate()
+                .map(|(index, kind)| {
+                    let index = u16::try_from(index).unwrap_or_default();
+                    let transmission = if port == 0 {
+                        Transmission::Transmitting
+                    } else {
+                        Transmission::Idle
+                    };
+                    sender_view(100 + port * 10 + index, &label, kind, transmission)
+                })
+                .collect();
+            let receivers: Vec<ReceiverView> = media
+                .iter()
+                .enumerate()
+                .map(|(index, kind)| {
+                    let index = u16::try_from(index).unwrap_or_default();
+                    receiver_view(
+                        400 + port * 10 + index,
+                        &format!("{label}/{kind}"),
+                        kind,
+                        Reception::Unsubscribed,
+                    )
+                })
+                .collect();
+            device_view(&label, senders, receivers)
+        })
+        .collect();
+
+    let mut node = known(
+        1,
+        "core-ml-2110-bm",
+        [10, 77, 1, 90],
+        ready("core-ml-2110-bm", devices),
+    );
+    node.hostname = Some("core-ml-2110-bm.local.".to_owned());
+    node
+}

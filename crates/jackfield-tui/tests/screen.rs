@@ -581,8 +581,9 @@ fn more_nodes_than_fit_scroll_and_the_selected_one_stays_visible() {
         app.select_next();
     }
     let text = screen(&mut app, WIDE, 12);
+    // The list pane has focus, so the selected row carries the highlight mark.
     assert!(
-        text.contains('>'),
+        text.contains('▸'),
         "the selected Node scrolled out of view:\n{text}"
     );
 }

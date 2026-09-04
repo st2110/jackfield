@@ -163,11 +163,7 @@ async fn act(app: &mut App, handle: &EngineHandle, action: Action) -> Option<Out
         }
         Action::Enter => app.enter(),
         Action::Back => app.back(),
-        Action::Expand => {
-            if let Some(sender) = sender_at(app, app.detail_row()) {
-                app.toggle_expanded(&sender);
-            }
-        }
+        Action::Expand => app.toggle_selected(),
         Action::Refresh => {
             if let Some(node) = app.selected() {
                 let _ = handle.send(Command::Refresh(node.key.clone())).await;
@@ -176,16 +172,6 @@ async fn act(app: &mut App, handle: &EngineHandle, action: Action) -> Option<Out
         Action::Quit => return Some(Outcome::Quit),
     }
     None
-}
-
-/// Which Sender the highlight is on, counting Senders in the order they render.
-fn sender_at(app: &App, row: usize) -> Option<jackfield_nmos::ResourceId> {
-    app.selected()?
-        .devices()
-        .iter()
-        .flat_map(|device| device.senders.iter())
-        .nth(row)
-        .map(|sender| sender.sender.core.id.clone())
 }
 
 /// Describe a snapshot in plain text, for `--once`.

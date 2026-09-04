@@ -1,6 +1,6 @@
 //! Turning keystrokes into what the operator meant.
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 /// What a keystroke asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,8 +22,15 @@ pub enum Action {
 }
 
 /// What a keystroke means, if it means anything.
+///
+/// Only a press counts. Windows reports a release for every key, and a terminal
+/// speaking the kitty keyboard protocol reports releases and repeats too; acting
+/// on those would move the selection twice for one keypress.
 #[must_use]
 pub fn action_for(key: KeyEvent) -> Option<Action> {
+    if key.kind != KeyEventKind::Press {
+        return None;
+    }
     match key.code {
         KeyCode::Down | KeyCode::Char('j') => Some(Action::Next),
         KeyCode::Up | KeyCode::Char('k') => Some(Action::Previous),

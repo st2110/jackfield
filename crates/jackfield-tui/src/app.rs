@@ -9,6 +9,19 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use jackfield_engine::{KnownNode, NodeKey, Snapshot};
+use jackfield_nmos::ResourceId;
+
+/// A row in the detail pane the highlight can land on.
+///
+/// Devices are structure, not destinations; only the Senders and Receivers
+/// under them are things an operator does something to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DetailTarget {
+    /// A Sender, which has a list of Receivers that can be opened.
+    Sender(ResourceId),
+    /// A Receiver.
+    Receiver(ResourceId),
+}
 
 /// Which pane the operator is in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,8 +42,10 @@ pub struct App {
     screen: Screen,
     /// Senders whose Receiver list the operator has opened.
     expanded: BTreeSet<jackfield_nmos::ResourceId>,
-    /// Which row of the detail pane is highlighted.
+    /// Which selectable row of the detail pane is highlighted.
     detail_row: usize,
+    /// How far the detail pane has scrolled.
+    detail_scroll: usize,
     /// How far the Node list has scrolled.
     scroll: usize,
 }
@@ -51,6 +66,7 @@ impl App {
             screen: Screen::Nodes,
             expanded: BTreeSet::new(),
             detail_row: 0,
+            detail_scroll: 0,
             scroll: 0,
         }
     }
@@ -116,10 +132,61 @@ impl App {
         self.scroll
     }
 
+    /// How far the detail pane has scrolled.
+    #[must_use]
+    pub fn detail_scroll(&self) -> usize {
+        self.detail_scroll
+    }
+
     /// Whether a Sender's Receiver list is open.
     #[must_use]
-    pub fn is_expanded(&self, sender: &jackfield_nmos::ResourceId) -> bool {
+    pub fn is_expanded(&self, sender: &ResourceId) -> bool {
         self.expanded.contains(sender)
+    }
+
+    /// Every row of the detail pane the highlight can land on, in the order
+    /// they are drawn.
+    #[must_use]
+    pub fn detail_targets(&self) -> Vec<DetailTarget> {
+        let Some(node) = self.selected() else {
+            return Vec::new();
+        };
+        node.devices()
+            .iter()
+            .flat_map(|device| {
+                device
+                    .senders
+                    .iter()
+                    .map(|sender| DetailTarget::Sender(sender.sender.core.id.clone()))
+                    .chain(
+                        device.receivers.iter().map(|receiver| {
+                            DetailTarget::Receiver(receiver.receiver.core.id.clone())
+                        }),
+                    )
+            })
+            .collect()
+    }
+
+    /// How many rows of the detail pane the highlight can land on.
+    #[must_use]
+    pub fn detail_len(&self) -> usize {
+        self.detail_targets().len()
+    }
+
+    /// What the highlight is on.
+    #[must_use]
+    pub fn detail_target(&self) -> Option<DetailTarget> {
+        self.detail_targets().get(self.detail_row).cloned()
+    }
+
+    /// Open or close the list under the highlight.
+    ///
+    /// Only a Sender has one. Pressing this on a Receiver does nothing rather
+    /// than opening somebody else's.
+    pub fn toggle_selected(&mut self) {
+        if let Some(DetailTarget::Sender(id)) = self.detail_target() {
+            self.toggle_expanded(&id);
+        }
     }
 
     /// Move the selection down the Node list.
@@ -163,6 +230,7 @@ impl App {
         if self.selected().is_some() {
             self.screen = Screen::Node;
             self.detail_row = 0;
+            self.detail_scroll = 0;
         }
     }
 
@@ -172,7 +240,7 @@ impl App {
     }
 
     /// Open or close a Sender's Receiver list.
-    pub fn toggle_expanded(&mut self, sender: &jackfield_nmos::ResourceId) {
+    pub fn toggle_expanded(&mut self, sender: &ResourceId) {
         if !self.expanded.remove(sender) {
             self.expanded.insert(sender.clone());
         }
@@ -180,7 +248,8 @@ impl App {
 
     /// Move the highlight down the detail pane.
     pub fn detail_next(&mut self) {
-        self.detail_row = self.detail_row.saturating_add(1);
+        let last = self.detail_len().saturating_sub(1);
+        self.detail_row = self.detail_row.saturating_add(1).min(last);
     }
 
     /// Move the highlight up the detail pane.
@@ -191,6 +260,22 @@ impl App {
     /// Which row of the detail pane is highlighted.
     #[must_use]
     pub fn detail_row(&self) -> usize {
-        self.detail_row
+        self.detail_row.min(self.detail_len().saturating_sub(1))
+    }
+
+    /// Keep the highlighted detail row visible in a pane `height` rows tall.
+    ///
+    /// `line` is where that row is drawn, which the renderer knows and this
+    /// does not: a Sender occupies three lines, and more when it is open.
+    pub fn scroll_detail_into_view(&mut self, line: usize, total: usize, height: usize) {
+        if height == 0 {
+            return;
+        }
+        if line < self.detail_scroll {
+            self.detail_scroll = line;
+        } else if line >= self.detail_scroll + height {
+            self.detail_scroll = line.saturating_sub(height.saturating_sub(1));
+        }
+        self.detail_scroll = self.detail_scroll.min(total.saturating_sub(height));
     }
 }

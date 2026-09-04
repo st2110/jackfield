@@ -11,7 +11,7 @@
 mod support;
 
 use jackfield_tui::{Action, App, Screen, action_for};
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use support::{known, ready, snapshot};
 
 fn key(code: KeyCode) -> KeyEvent {
@@ -92,4 +92,28 @@ fn expanding_a_sender_toggles() {
     assert!(app.is_expanded(&sender));
     app.toggle_expanded(&sender);
     assert!(!app.is_expanded(&sender));
+}
+
+#[test]
+fn only_a_press_is_a_keystroke() {
+    // Windows reports a release for every key, and a terminal speaking the
+    // kitty keyboard protocol reports releases and repeats. Acting on those
+    // would move the selection twice for one keypress.
+    for kind in [KeyEventKind::Release, KeyEventKind::Repeat] {
+        let event = KeyEvent::new_with_kind_and_state(
+            KeyCode::Down,
+            KeyModifiers::NONE,
+            kind,
+            KeyEventState::NONE,
+        );
+        assert_eq!(action_for(event), None, "{kind:?}");
+    }
+
+    let press = KeyEvent::new_with_kind_and_state(
+        KeyCode::Down,
+        KeyModifiers::NONE,
+        KeyEventKind::Press,
+        KeyEventState::NONE,
+    );
+    assert_eq!(action_for(press), Some(Action::Next));
 }

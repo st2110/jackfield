@@ -14,11 +14,21 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
 
-use crate::app::{App, Screen};
+use crate::app::{App, DetailTarget, Screen};
 
 /// The keys the interface answers to, shown on screen so an operator need not
 /// know them already.
-pub const KEY_HINTS: &str = " up/down move  enter open  esc back  space expand  r refresh  q quit ";
+pub const KEY_HINTS: &str =
+    " up/down move  enter/right open  esc/left back  space expand  r refresh  q quit ";
+
+/// Marks the row the keyboard is on.
+///
+/// A mark, not a colour: the screen has to be legible on a monochrome terminal,
+/// and "which row am I on" is the single most important thing on it.
+const HIGHLIGHT: &str = "▸";
+
+/// Marks which pane the keyboard is talking to.
+const FOCUS: &str = "◂";
 
 /// Draw the whole screen.
 pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
@@ -49,7 +59,13 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
 }
 
 fn draw_nodes(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let block = Block::default().borders(Borders::ALL).title(" Nodes ");
+    let focused = app.screen() == Screen::Nodes;
+    let title = if focused {
+        format!(" Nodes {FOCUS} ")
+    } else {
+        " Nodes ".to_owned()
+    };
+    let block = Block::default().borders(Borders::ALL).title(title);
 
     if app.nodes().is_empty() {
         // An empty frame with no explanation tells an operator nothing.
@@ -69,7 +85,15 @@ fn draw_nodes(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .skip(app.scroll())
         .take(height.max(1))
         .map(|(index, node)| {
-            let marker = if Some(index) == selected { "> " } else { "  " };
+            let marker = if Some(index) == selected {
+                if focused {
+                    format!("{HIGHLIGHT} ")
+                } else {
+                    "> ".to_owned()
+                }
+            } else {
+                "  ".to_owned()
+            };
             let style = if Some(index) == selected {
                 Style::default().add_modifier(Modifier::REVERSED)
             } else {
@@ -106,7 +130,9 @@ fn node_line(node: &KnownNode) -> String {
     format!("{} — {state} — {address}", node.display_name())
 }
 
-fn draw_detail(frame: &mut Frame<'_>, app: &App, area: Rect) {
+fn draw_detail(frame: &mut Frame<'_>, app: &mut App, area: Rect) {
+    let focused = app.screen() == Screen::Node;
+
     let Some(node) = app.selected() else {
         frame.render_widget(
             Paragraph::new("Nothing selected.")
@@ -116,83 +142,173 @@ fn draw_detail(frame: &mut Frame<'_>, app: &App, area: Rect) {
         return;
     };
 
-    let title = format!(" {} ", node.display_name());
+    let title = if focused {
+        format!(" {} {FOCUS} ", node.display_name())
+    } else {
+        format!(" {} ", node.display_name())
+    };
     let block = Block::default().borders(Borders::ALL).title(title);
 
-    // The address always appears here, whatever the list pane had room for.
-    let mut lines: Vec<Line<'_>> = node
-        .endpoints
-        .iter()
-        .map(|endpoint| Line::raw(format!("Address {endpoint}")))
-        .collect();
-    if lines.is_empty() {
-        lines.push(Line::raw("Address unknown"));
-    }
-    lines.push(Line::raw(""));
+    let rows = detail_rows(app);
 
-    let body: Vec<Line<'_>> = match &node.state {
-        NodeState::Loading => vec![Line::raw("Loading this Node's resources.")],
-        NodeState::Failed { reason } => vec![
-            Line::raw(format!("This Node could not be read: {reason}")),
-            Line::raw("Press r to try again."),
-        ],
-        NodeState::Ready(contents) => {
-            if app.screen() == Screen::Nodes && contents.devices.is_empty() {
-                vec![Line::raw("This Node exposes no Devices.")]
+    // Where the highlighted row is drawn, which only this side knows: a Sender
+    // occupies three lines, and more when its Receivers are open.
+    let height = usize::from(area.height.saturating_sub(2));
+    let selected = app.detail_target();
+    let highlighted = selected.as_ref().and_then(|target| {
+        rows.iter()
+            .position(|row| row.target.as_ref() == Some(target))
+    });
+    if let Some(line) = highlighted {
+        app.scroll_detail_into_view(line, rows.len(), height);
+    }
+    let scroll = app.detail_scroll();
+
+    let lines: Vec<Line<'_>> = rows
+        .into_iter()
+        .enumerate()
+        .skip(scroll)
+        .take(height.max(1))
+        .map(|(index, row)| {
+            let on_it = focused && Some(index) == highlighted;
+            let marker = if on_it { HIGHLIGHT } else { " " };
+            let style = if on_it {
+                Style::default().add_modifier(Modifier::REVERSED)
             } else {
-                node_body(app, &contents.devices, &contents.orphans)
-            }
-        }
-    };
-    lines.extend(body);
+                Style::default()
+            };
+            Line::from(vec![Span::raw(marker.to_owned()), Span::raw(row.text)]).style(style)
+        })
+        .collect();
 
     frame.render_widget(Paragraph::new(lines).block(block), area);
+}
+
+/// One line of the detail pane, and what the highlight would be on there.
+struct DetailRow {
+    text: String,
+    target: Option<DetailTarget>,
+}
+
+impl DetailRow {
+    fn plain(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            target: None,
+        }
+    }
+
+    fn at(text: impl Into<String>, target: DetailTarget) -> Self {
+        Self {
+            text: text.into(),
+            target: Some(target),
+        }
+    }
+}
+
+/// Every line of the detail pane, in order.
+fn detail_rows(app: &App) -> Vec<DetailRow> {
+    let Some(node) = app.selected() else {
+        return Vec::new();
+    };
+
+    let mut rows: Vec<DetailRow> = node
+        .endpoints
+        .iter()
+        .map(|endpoint| DetailRow::plain(format!("Address {endpoint}")))
+        .collect();
+    if rows.is_empty() {
+        rows.push(DetailRow::plain("Address unknown"));
+    }
+    rows.push(DetailRow::plain(""));
+
+    match &node.state {
+        NodeState::Loading => rows.push(DetailRow::plain("Loading this Node's resources.")),
+        NodeState::Failed { reason } => {
+            rows.push(DetailRow::plain(format!(
+                "This Node could not be read: {reason}"
+            )));
+            rows.push(DetailRow::plain("Press r to try again."));
+        }
+        NodeState::Ready(contents) => {
+            rows.extend(node_body(app, &contents.devices, &contents.orphans));
+        }
+    }
+
+    rows
 }
 
 fn node_body(
     app: &App,
     devices: &[DeviceView],
     orphans: &[jackfield_engine::Orphan],
-) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
+) -> Vec<DetailRow> {
+    let mut rows = Vec::new();
 
     if devices.is_empty() {
-        lines.push(Line::raw("This Node exposes no Devices."));
+        rows.push(DetailRow::plain("This Node exposes no Devices."));
     }
 
     for device in devices {
-        lines.push(Line::raw(format!("Device {}", device.device.core.label)));
+        rows.push(DetailRow::plain(format!(
+            "Device {}",
+            device.device.core.label
+        )));
         if device.is_empty() {
-            lines.push(Line::raw("    no senders or receivers"));
+            rows.push(DetailRow::plain("    no senders or receivers"));
         }
+
         for sender in &device.senders {
             // Several short lines rather than one long one: a detail pane on an
             // 80-column terminal is about seventy characters wide, and a row
-            // that runs past it loses whichever fact happens to be last.
-            lines.extend(sender_lines(sender).into_iter().map(Line::raw));
+            // that runs past it loses whichever fact happens to be last. The
+            // first of them is what the highlight lands on.
+            let target = DetailTarget::Sender(sender.sender.core.id.clone());
+            let mut lines = sender_lines(sender).into_iter();
+            if let Some(first) = lines.next() {
+                rows.push(DetailRow::at(first, target));
+            }
+            rows.extend(lines.map(DetailRow::plain));
+
             if app.is_expanded(&sender.sender.core.id) {
+                if sender.taken_by.is_empty() {
+                    rows.push(DetailRow::plain("            (nothing takes this stream)"));
+                }
                 for taker in &sender.taken_by {
-                    lines.push(Line::raw(format!("            {taker}")));
+                    rows.push(DetailRow::plain(format!("            {taker}")));
                 }
             }
         }
+
         for receiver in &device.receivers {
-            lines.extend(receiver_lines(receiver).into_iter().map(Line::raw));
+            let target = DetailTarget::Receiver(receiver.receiver.core.id.clone());
+            let mut lines = receiver_lines(receiver).into_iter();
+            if let Some(first) = lines.next() {
+                rows.push(DetailRow::at(first, target));
+            }
+            rows.extend(lines.map(DetailRow::plain));
         }
-        lines.push(Line::raw(""));
+
+        rows.push(DetailRow::plain(""));
     }
 
     for orphan in orphans {
-        lines.push(Line::raw(format!(
+        rows.push(DetailRow::plain(format!(
             "Unattached {:?} {} — names a Device this Node did not return",
             orphan.kind, orphan.label
         )));
     }
 
-    lines
+    rows
 }
 
 /// One Sender's rows.
+///
+/// Two lines, not one and not three. One runs past a detail pane on an
+/// 80-column terminal and loses whichever fact happens to be last; three means
+/// a single Device does not fit on screen, and an operator scrolls to see what
+/// they are looking at. State and destination belong together — "transmitting
+/// to nowhere" is one thought — and who is listening is the other.
 ///
 /// A Sender is never described as connected. It is Transmitting or Idle, and
 /// who takes its stream is a separate fact stated separately — see
@@ -203,34 +319,35 @@ fn sender_lines(sender: &SenderView) -> Vec<String> {
         Transmission::Idle => "idle",
     };
 
-    let mut lines = vec![format!(
-        "    Sender {} [{}] {state}",
-        sender.sender.core.label, sender.media
-    )];
-
-    lines.push(match &sender.transport {
-        Transport::Pending => "        destination pending".to_owned(),
-        Transport::Unavailable { reason } => format!("        destination unknown: {reason}"),
-        Transport::Known { streams } if streams.is_empty() => "        no destination".to_owned(),
+    let destination = match &sender.transport {
+        Transport::Pending => "destination pending".to_owned(),
+        Transport::Unavailable { reason } => format!("destination unknown: {reason}"),
+        Transport::Known { streams } if streams.is_empty() => "no destination".to_owned(),
         Transport::Known { streams } => {
             let shown: Vec<String> = streams.iter().map(ToString::to_string).collect();
-            format!("        to {}", shown.join(" + "))
+            format!("to {}", shown.join(" + "))
         }
-    });
+    };
 
-    lines.push(if sender.transport.is_pending() {
-        "        receivers not yet known".to_owned()
+    let takers = if sender.transport.is_pending() {
+        "receivers not yet known".to_owned()
     } else if sender.taken_by.is_empty() {
-        "        taken by nobody".to_owned()
+        "taken by nobody".to_owned()
     } else {
         format!(
-            "        taken by {} receiver{}",
+            "taken by {} receiver{}",
             sender.taken_by.len(),
             if sender.taken_by.len() == 1 { "" } else { "s" }
         )
-    });
+    };
 
-    lines
+    vec![
+        format!(
+            "    Sender {} [{}] {state}, {destination}",
+            sender.sender.core.label, sender.media
+        ),
+        format!("        {takers}"),
+    ]
 }
 
 /// One Receiver's rows.
