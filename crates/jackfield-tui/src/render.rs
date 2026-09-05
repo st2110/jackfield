@@ -18,8 +18,7 @@ use crate::app::{App, DetailTarget, Screen};
 
 /// The keys the interface answers to, shown on screen so an operator need not
 /// know them already.
-pub const KEY_HINTS: &str =
-    " up/down move  enter/right open  esc/left back  space expand  r refresh  q quit ";
+pub const KEY_HINTS: &str = " up/down move  enter/right open  esc/left back  space expand  t on/off  m mark source  r refresh  q quit ";
 
 /// Marks the row the keyboard is on.
 ///
@@ -341,13 +340,17 @@ fn sender_lines(sender: &SenderView) -> Vec<String> {
         )
     };
 
-    vec![
+    let mut lines = vec![
         format!(
             "    Sender {} [{}] {state}, {destination}",
             sender.sender.core.label, sender.media
         ),
         format!("        {takers}"),
-    ]
+    ];
+    if let Some(requested) = &sender.requested {
+        lines.push(format!("        -> {requested}"));
+    }
+    lines
 }
 
 /// One Receiver's rows.
@@ -390,6 +393,10 @@ fn receiver_lines(receiver: &ReceiverView) -> Vec<String> {
         Pairing::Unmatched => {
             lines.push("        from a sender this controller has not found".to_owned());
         }
+    }
+
+    if let Some(requested) = &receiver.requested {
+        lines.push(format!("        -> {requested}"));
     }
 
     lines

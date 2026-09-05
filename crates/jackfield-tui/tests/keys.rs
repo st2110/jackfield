@@ -117,3 +117,24 @@ fn only_a_press_is_a_keystroke() {
     );
     assert_eq!(action_for(press), Some(Action::Next));
 }
+
+#[test]
+fn t_changes_what_a_resource_is_doing_and_m_names_a_source() {
+    // Two keys rather than one: the Sender and the Receiver of a connection are
+    // usually on different boxes, so the operator cannot point at both at once.
+    assert_eq!(action_for(key(KeyCode::Char('t'))), Some(Action::Toggle));
+    assert_eq!(action_for(key(KeyCode::Char('m'))), Some(Action::Mark));
+}
+
+#[test]
+fn releasing_a_write_key_does_not_write_twice() {
+    // A terminal speaking the kitty protocol reports releases and repeats. A
+    // release acted on would put a Sender back off air the instant it went on.
+    let released = |code| KeyEvent {
+        kind: KeyEventKind::Release,
+        ..KeyEvent::new(code, KeyModifiers::NONE)
+    };
+
+    assert_eq!(action_for(released(KeyCode::Char('t'))), None);
+    assert_eq!(action_for(released(KeyCode::Char('m'))), None);
+}

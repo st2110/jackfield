@@ -176,9 +176,62 @@ async fn act(app: &mut App, handle: &EngineHandle, action: Action) -> Option<Out
                 let _ = handle.send(Command::Refresh(node.key.clone())).await;
             }
         }
+        Action::Mark => app.mark(),
+        Action::Toggle => toggle(app, handle).await,
         Action::Quit => return Some(Outcome::Quit),
     }
     None
+}
+
+/// Change what the highlighted resource is doing.
+///
+/// A Sender goes on or off air. A Receiver that is taking something is taken
+/// off it; one that is taking nothing is pointed at the marked Sender, and does
+/// nothing at all if no Sender has been marked — connecting a Receiver to
+/// whatever happened to be nearby is not a guess a controller may make.
+async fn toggle(app: &App, handle: &EngineHandle) {
+    let Some(command) = toggle_command(app) else {
+        return;
+    };
+    // Ignored: an engine that has stopped is discovered by the loop that draws.
+    let _ = handle.send(command).await;
+}
+
+/// Which command the highlight would produce, or none where there is nothing
+/// to ask for.
+///
+/// Separated from sending it so that the decision — which is where the domain
+/// rules live — can be tested without a running engine.
+#[must_use]
+pub fn toggle_command(app: &App) -> Option<Command> {
+    let node = app.selected().map(|node| node.key.clone())?;
+
+    if let Some(view) = app.selected_sender() {
+        let transmitting = view.transmission.is_transmitting();
+        let sender = view.sender.core.id.clone();
+        return Some(if transmitting {
+            Command::StopTransmitting { node, sender }
+        } else {
+            Command::StartTransmitting { node, sender }
+        });
+    }
+
+    let receiver = app.selected_receiver()?;
+    let subscribed = receiver.reception.is_subscribed();
+    let receiver = receiver.receiver.core.id.clone();
+    if subscribed {
+        return Some(Command::Unsubscribe { node, receiver });
+    }
+
+    // A Receiver with nothing to take produces no command: connecting it to
+    // whatever happened to be nearby is not a guess a controller may make.
+    let (from, sender) = app.marked().cloned()?;
+    Some(Command::Subscribe {
+        node,
+        receiver,
+        from,
+        sender,
+    })
 }
 
 /// Describe a snapshot in plain text, for `--once`.

@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use jackfield_engine::{KnownNode, NodeKey, Snapshot};
+use jackfield_engine::{KnownNode, NodeKey, ReceiverView, SenderView, Snapshot};
 use nmos::ResourceId;
 
 /// A row in the detail pane the highlight can land on.
@@ -48,6 +48,10 @@ pub struct App {
     detail_scroll: usize,
     /// How far the Node list has scrolled.
     scroll: usize,
+    /// The Sender a subscription will take from, once the operator has named
+    /// one. Held by Node as well as by identifier, because the Receiver being
+    /// connected is almost always on a different box.
+    marked: Option<(NodeKey, ResourceId)>,
 }
 
 impl Default for App {
@@ -68,6 +72,7 @@ impl App {
             detail_row: 0,
             detail_scroll: 0,
             scroll: 0,
+            marked: None,
         }
     }
 
@@ -177,6 +182,50 @@ impl App {
     #[must_use]
     pub fn detail_target(&self) -> Option<DetailTarget> {
         self.detail_targets().get(self.detail_row).cloned()
+    }
+
+    /// The Sender under the highlight, if the highlight is on one.
+    #[must_use]
+    pub fn selected_sender(&self) -> Option<&SenderView> {
+        let DetailTarget::Sender(id) = self.detail_target()? else {
+            return None;
+        };
+        self.selected()?
+            .devices()
+            .iter()
+            .flat_map(|device| &device.senders)
+            .find(|sender| sender.sender.core.id == id)
+    }
+
+    /// The Receiver under the highlight, if the highlight is on one.
+    #[must_use]
+    pub fn selected_receiver(&self) -> Option<&ReceiverView> {
+        let DetailTarget::Receiver(id) = self.detail_target()? else {
+            return None;
+        };
+        self.selected()?
+            .devices()
+            .iter()
+            .flat_map(|device| &device.receivers)
+            .find(|receiver| receiver.receiver.core.id == id)
+    }
+
+    /// Name the highlighted Sender as the source of the next subscription.
+    ///
+    /// Marking is separate from connecting because the two ends are usually on
+    /// different Nodes, and an operator cannot point at both at once.
+    pub fn mark(&mut self) {
+        if let (Some(node), Some(DetailTarget::Sender(id))) =
+            (self.selected().map(|n| n.key.clone()), self.detail_target())
+        {
+            self.marked = Some((node, id));
+        }
+    }
+
+    /// The Sender a subscription would take from.
+    #[must_use]
+    pub fn marked(&self) -> Option<&(NodeKey, ResourceId)> {
+        self.marked.as_ref()
     }
 
     /// Open or close the list under the highlight.

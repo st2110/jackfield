@@ -20,4 +20,7 @@ mod options;
 mod run;
 
 pub use options::Options;
-pub use run::{Outcome, describe, drive, run, run_headless, spawn_engine, spawn_engine_with, stop};
+pub use run::{
+    Outcome, describe, drive, run, run_headless, spawn_engine, spawn_engine_with, stop,
+    toggle_command,
+};

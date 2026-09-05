@@ -17,6 +17,11 @@ pub enum Action {
     Expand,
     /// Re-read the selected Node.
     Refresh,
+    /// Change what the highlighted resource is doing: a Sender on or off air,
+    /// a Receiver onto the marked Sender or off everything.
+    Toggle,
+    /// Mark the highlighted Sender as the source the next subscription takes.
+    Mark,
     /// Leave.
     Quit,
 }
@@ -38,6 +43,8 @@ pub fn action_for(key: KeyEvent) -> Option<Action> {
         KeyCode::Esc | KeyCode::Left | KeyCode::Char('h') => Some(Action::Back),
         KeyCode::Char(' ') => Some(Action::Expand),
         KeyCode::Char('r') => Some(Action::Refresh),
+        KeyCode::Char('t') => Some(Action::Toggle),
+        KeyCode::Char('m') => Some(Action::Mark),
         KeyCode::Char('q') => Some(Action::Quit),
         // Ctrl-C, because a terminal application that ignores it is a
         // terminal application people kill from another window.
