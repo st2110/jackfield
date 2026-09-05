@@ -313,24 +313,26 @@ where
 
             if let Some(key) = pending.transports.iter().next().cloned() {
                 pending.transports.remove(&key);
-                let Some(base) = inventory.connection_base(&key) else {
-                    continue;
-                };
                 let (senders, receivers) = inventory.resources_of(&key);
                 // One task per Node, reading its resources in sequence: the
                 // bound is on Nodes, not on requests, because a small device
-                // answers one at a time.
+                // answers one at a time. The base is resolved per resource,
+                // because each Device advertises its own Connection API.
                 for id in senders {
+                    let Some(base) = inventory.connection_base(&key, &id) else {
+                        continue;
+                    };
                     let fetcher = Arc::clone(&self.fetcher);
-                    let base = base.clone();
                     running.spawn(async move {
                         let result = fetcher.fetch_sender_transport(base, id.clone()).await;
                         Done::SenderTransport(id, Box::new(result))
                     });
                 }
                 for id in receivers {
+                    let Some(base) = inventory.connection_base(&key, &id) else {
+                        continue;
+                    };
                     let fetcher = Arc::clone(&self.fetcher);
-                    let base = base.clone();
                     running.spawn(async move {
                         let result = fetcher.fetch_receiver_transport(base, id.clone()).await;
                         Done::ReceiverTransport(id, Box::new(result))

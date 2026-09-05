@@ -16,8 +16,8 @@ use nmos::{
     Transmission,
 };
 use support::{
-    TreeBuilder, advertisement, bench_tree, device, flow, id, receiver, sender, source, subscribed,
-    transmitting,
+    TreeBuilder, advertisement, bench_tree, controlled_at, device, flow, id, receiver, sender,
+    source, subscribed, transmitting,
 };
 
 fn multicast(last: u8, port: u16) -> StreamAddress {
@@ -778,20 +778,98 @@ fn the_connection_api_base_is_the_origin_of_the_advertised_control() {
     inventory.set_tree(&key, bench_tree());
 
     assert_eq!(
-        inventory.connection_base(&key).as_deref(),
+        inventory.connection_base(&key, &id(100)).as_deref(),
         Some("http://10.77.1.90:8090")
     );
 }
 
 #[test]
-fn a_node_advertising_no_connection_control_has_no_connection_base() {
+fn a_device_advertising_no_connection_control_leaves_its_resources_alone() {
     let mut inventory = Inventory::new();
     let key = inventory.observe(&advertisement("converter", [10, 77, 1, 90], 8090));
     let mut plain = device(10, "SDI 1", 1);
     plain.controls.clear();
-    inventory.set_tree(&key, TreeBuilder::new(1, "Converter").device(plain).build());
+    inventory.set_tree(
+        &key,
+        TreeBuilder::new(1, "Converter")
+            .device(plain)
+            .sender(sender(100, "SDI 1", 10, None))
+            .build(),
+    );
 
-    assert_eq!(inventory.connection_base(&key), None);
+    assert_eq!(inventory.connection_base(&key, &id(100)), None);
+}
+
+#[test]
+fn each_resource_is_reached_at_the_connection_api_of_its_own_device() {
+    // IS-05 allows a Connection API per Device, and a Device that has none at
+    // all. Resolving one base for the whole Node sends a Device's resources to
+    // a neighbour's API — which, for a write, is a patch into the wrong box.
+    let mut inventory = Inventory::new();
+    let key = inventory.observe(&advertisement("converter", [10, 77, 1, 90], 8090));
+
+    let mut mute = device(10, "SDI 1", 1);
+    mute.controls.clear();
+    let elsewhere = controlled_at(
+        device(11, "SDI 2", 1),
+        "http://10.77.1.90:8091/x-nmos/connection/v1.1/",
+    );
+
+    inventory.set_tree(
+        &key,
+        TreeBuilder::new(1, "Converter")
+            .device(mute)
+            .device(elsewhere)
+            .sender(sender(100, "SDI 1", 10, None))
+            .sender(sender(101, "SDI 2", 11, None))
+            .receiver(receiver(400, "SDI 2", 11, "video/raw"))
+            .build(),
+    );
+
+    assert_eq!(inventory.connection_base(&key, &id(100)), None);
+    assert_eq!(
+        inventory.connection_base(&key, &id(101)).as_deref(),
+        Some("http://10.77.1.90:8091")
+    );
+    assert_eq!(
+        inventory.connection_base(&key, &id(400)).as_deref(),
+        Some("http://10.77.1.90:8091")
+    );
+}
+
+#[test]
+fn a_resource_the_node_never_returned_has_no_connection_base() {
+    let mut inventory = Inventory::new();
+    let key = inventory.observe(&advertisement("converter", [10, 77, 1, 90], 8090));
+    inventory.set_tree(&key, bench_tree());
+
+    assert_eq!(inventory.connection_base(&key, &id(999)), None);
+}
+
+#[test]
+fn an_orphan_resource_has_no_connection_base() {
+    // The Sender names a Device the Node did not return, so there is nothing
+    // to read a control endpoint from. An orphan is shown, not patched.
+    let mut inventory = Inventory::new();
+    let key = inventory.observe(&advertisement("converter", [10, 77, 1, 90], 8090));
+    inventory.set_tree(
+        &key,
+        TreeBuilder::new(1, "Converter")
+            .sender(sender(100, "SDI 1", 10, None))
+            .build(),
+    );
+
+    assert_eq!(inventory.connection_base(&key, &id(100)), None);
+}
+
+#[test]
+fn an_unknown_node_has_no_connection_base() {
+    let inventory = Inventory::new();
+
+    assert_eq!(
+        inventory.connection_base(&NodeKey::Provisional("nobody".to_owned()), &id(100)),
+        None
+    );
 }
 
 #[test]

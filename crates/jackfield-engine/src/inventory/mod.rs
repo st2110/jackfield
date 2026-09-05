@@ -291,21 +291,41 @@ impl Inventory {
         )
     }
 
-    /// Where a Node advertises its Connection API, if any of its Devices does.
+    /// Where the Device owning a Sender or Receiver advertises its Connection
+    /// API, if it advertises one.
+    ///
+    /// Resolved per Device, not per Node: IS-05 permits one instance of the
+    /// Connection API per Device, and permits a Device to expose none at all.
+    /// A resource whose Device advertises nothing is not controllable over
+    /// IS-05, and answering with a neighbour's base would read — or write — the
+    /// wrong box.
     #[must_use]
-    pub fn connection_base(&self, key: &NodeKey) -> Option<String> {
-        self.trees.get(key)?.devices.iter().find_map(|device| {
-            device
-                .control_href(nmos::CONNECTION_CONTROL_URN)
-                .map(|href| {
-                    // The advertised href already ends in `/x-nmos/connection/v1.1/`;
-                    // the client builds that path itself, so only the origin is kept.
-                    let trimmed = href.trim_end_matches('/');
-                    match trimmed.find("/x-nmos/connection") {
-                        Some(at) => trimmed.get(..at).unwrap_or(trimmed).to_owned(),
-                        None => trimmed.to_owned(),
-                    }
-                })
+    pub fn connection_base(&self, key: &NodeKey, resource: &ResourceId) -> Option<String> {
+        let tree = self.trees.get(key)?;
+        let device_id = tree
+            .senders
+            .iter()
+            .find(|sender| &sender.core.id == resource)
+            .map(|sender| &sender.device_id)
+            .or_else(|| {
+                tree.receivers
+                    .iter()
+                    .find(|receiver| &receiver.core.id == resource)
+                    .map(|receiver| &receiver.device_id)
+            })?;
+
+        let href = tree
+            .devices
+            .iter()
+            .find(|device| &device.core.id == device_id)?
+            .control_href(nmos::CONNECTION_CONTROL_URN)?;
+
+        // The advertised href already ends in `/x-nmos/connection/v1.1/`; the
+        // client builds that path itself, so only the origin is kept.
+        let trimmed = href.trim_end_matches('/');
+        Some(match trimmed.find("/x-nmos/connection") {
+            Some(at) => trimmed.get(..at).unwrap_or(trimmed).to_owned(),
+            None => trimmed.to_owned(),
         })
     }
 

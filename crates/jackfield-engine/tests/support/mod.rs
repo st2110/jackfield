@@ -73,6 +73,17 @@ pub fn device(n: u16, label: &str, node_id: u16) -> Device {
     }
 }
 
+/// The same Device, advertising its Connection API somewhere else. A Node may
+/// run one per Device, so two Devices on one Node need not share a base URL.
+pub fn controlled_at(mut device: Device, href: &str) -> Device {
+    device.controls = vec![Control {
+        href: href.to_owned(),
+        kind: "urn:x-nmos:control:sr-ctrl/v1.1".to_owned(),
+        authorization: false,
+    }];
+    device
+}
+
 pub fn sender(n: u16, label: &str, device_id: u16, flow_id: Option<u16>) -> Sender {
     Sender {
         core: core(n, label),
