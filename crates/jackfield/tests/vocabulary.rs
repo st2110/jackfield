@@ -32,7 +32,7 @@ const FORBIDDEN: &[(&str, &str)] = &[
 ///
 /// The IS-05 Connection API names an endpoint `active`; a type modelling that
 /// endpoint's response is faithful to the protocol, not a description of a
-/// Sender's state, and lives in `jackfield-nmos` where protocol names belong.
+/// Sender's state, and lives in the `nmos` crate where protocol names belong.
 const ALLOWED: &[&str] = &[
     // IS-05's own transport parameter, `rtp_enabled`. It says whether RTP is
     // running on one leg of a transport, which is a protocol fact, not a

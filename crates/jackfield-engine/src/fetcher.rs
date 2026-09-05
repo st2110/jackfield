@@ -3,7 +3,7 @@
 //! Errors become strings here, and that is deliberate. The engine stores a
 //! failure against a Node so the interface can show it to an operator; what it
 //! needs is a sentence that points at what to fix, not a type to match on. The
-//! typed errors stay where they can still be acted on, in `jackfield-nmos`.
+//! typed errors stay where they can still be acted on, in the `nmos` crate.
 
 use nmos::{
     ApiVersion, CollectionData, ConnectionApiClient, NodeApiClient, NodeCollection,
