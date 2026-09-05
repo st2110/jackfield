@@ -15,8 +15,8 @@
 mod support;
 
 use jackfield_engine::{NodeState, Pairing, Transport};
-use jackfield_nmos::{Reception, Transmission};
 use jackfield_tui::App;
+use nmos::{Reception, Transmission};
 use support::{
     device_view, known, ready, ready_with_orphan, receiver_view, render, resource_ref, screen,
     sender_view, snapshot, stream,

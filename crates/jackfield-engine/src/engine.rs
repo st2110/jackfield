@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use jackfield_nmos::{
+use nmos::{
     ApiVersion, CollectionData, NodeCollection, ReceiverTransport, ResourceId, ResourceTree,
     SenderTransport,
 };
@@ -350,7 +350,7 @@ where
 fn advertised_versions(inventory: &Inventory, key: &NodeKey) -> Vec<ApiVersion> {
     let known = inventory.versions_of(key);
     if known.is_empty() {
-        jackfield_nmos::SUPPORTED_VERSIONS.to_vec()
+        nmos::SUPPORTED_VERSIONS.to_vec()
     } else {
         known
     }

@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use jackfield_nmos::NodeCollection as Collection;
+use nmos::NodeCollection as Collection;
 
 /// What a Node's advertisement says about how current each collection is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

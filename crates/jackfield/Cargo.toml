@@ -3,6 +3,9 @@ name = "jackfield"
 description = "NMOS controller for SMPTE ST 2110 networks"
 version.workspace = true
 edition.workspace = true
+# This is the controller, not a library. Its public API is a screen and a set of
+# keystrokes; the protocol is what got published, as `nmos`.
+publish = false
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -12,7 +15,7 @@ authors.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 jackfield-engine.workspace = true
-jackfield-nmos.workspace = true
+nmos.workspace = true
 jackfield-tui.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "signal"] }
 tracing.workspace = true

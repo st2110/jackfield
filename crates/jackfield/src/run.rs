@@ -8,8 +8,8 @@ use jackfield_engine::{
     Command, Discovery, Engine, EngineConfig, EngineHandle, Fetcher, MdnsDiscovery, NmosFetcher,
     Snapshot,
 };
-use jackfield_nmos::{ConnectionApiClient, NodeApiClient};
 use jackfield_tui::{Action, App, Screen, TerminalGuard, action_for};
+use nmos::{ConnectionApiClient, NodeApiClient};
 
 use crate::options::Options;
 

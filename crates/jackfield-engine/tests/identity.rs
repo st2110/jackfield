@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr};
 
 use jackfield_engine::{Advertisement, Identified, Identities, NodeKey};
-use jackfield_nmos::ResourceId;
+use nmos::ResourceId;
 
 const CONVERTER: &str = "3b8be755-08ff-452b-b217-c9151eb21193";
 const OTHER: &str = "9126cc2f-4c26-4c9b-a6cd-93c4381c9be5";

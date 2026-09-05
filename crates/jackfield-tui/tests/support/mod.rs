@@ -11,7 +11,7 @@ use jackfield_engine::{
     DeviceView, Endpoint, KnownNode, Media, NodeContents, NodeKey, NodeState, Orphan, OrphanKind,
     Pairing, ReceiverView, ResourceRef, SenderView, Snapshot, Transport,
 };
-use jackfield_nmos::{
+use nmos::{
     Control, Device, MediaCaps, MediaType, Node, NodeApi, Protocol, Receiver, ReceiverCaps,
     ReceiverSubscription, Reception, ResourceCore, ResourceId, Sender, SenderSubscription,
     StreamAddress, Transmission,
@@ -89,7 +89,7 @@ pub fn sender_view(n: u16, label: &str, media: &str, transmission: Transmission)
         transmission,
         media: Media::Known {
             media_type: media.parse::<MediaType>().expect("a media type"),
-            format: jackfield_nmos::Format::Video,
+            format: nmos::Format::Video,
         },
         transport: Transport::Pending,
         taken_by: Vec::new(),

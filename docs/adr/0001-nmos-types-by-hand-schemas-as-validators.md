@@ -1,5 +1,9 @@
 # NMOS types are written by hand; the AMWA schemas are validators
 
+> This decision moved with the code: the types and the vendored schemas now live
+> in the published `nmos` crate, which carries the same two-directional test
+> suite. Kept here because it is why the crate looks the way it does.
+
 AMWA publishes the NMOS contract as JSON Schema **draft-04**, built from `allOf`
 composition over `resource_core.json` with polymorphism expressed structurally
 (`flow_video_raw`, `receiver_mux`, and so on). Rust type generators target

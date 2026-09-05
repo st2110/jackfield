@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use jackfield_nmos::{Reception, ResourceId, StreamAddress};
+use nmos::{Reception, ResourceId, StreamAddress};
 
 use super::view::{KnownNode, NodeState, Pairing, ResourceRef, Transport};
 use crate::identity::NodeKey;

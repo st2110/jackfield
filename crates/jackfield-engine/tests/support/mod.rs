@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr};
 
 use jackfield_engine::Advertisement;
-use jackfield_nmos::{
+use nmos::{
     ApiVersion, Control, Device, Flow, FlowCore, InterlaceMode, MediaCaps, MediaType, Node,
     NodeApi, Rate, Receiver, ReceiverCaps, ReceiverSubscription, Reception, ResourceCore,
     ResourceId, ResourceTree, Sender, SenderSubscription, Source, SourceCore, Transmission,

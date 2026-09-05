@@ -20,7 +20,7 @@ use jackfield_engine::{
     Advertisement, Collection, Discovery, DiscoveryEvent, Endpoint, FabricatedDiscovery,
     VersionCounters,
 };
-use jackfield_nmos::Protocol;
+use nmos::Protocol;
 
 /// The TXT records the bench converter actually publishes.
 fn bench_txt() -> BTreeMap<String, String> {

@@ -4,12 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status
 
-This repository has no code yet — only `README.md`, `LICENSE`, and this file. There is
-no source, build system, or test suite so far.
+A Rust workspace of three crates — `jackfield-engine` (discovery, inventory,
+fetching), `jackfield-tui` (the screen), and `jackfield` (the binary). The
+protocol itself is not here: it is the published `nmos` crate
+(<https://crates.io/crates/nmos>), and `docs/adr/0003-crate-split-engine-owns-state.md`
+says where the boundary runs.
 
-Nothing about the intended architecture, language, or toolchain has been decided in
-this repo — do not infer it. Once real code lands, replace this section with the
-build/lint/test commands and the big-picture architecture.
+```bash
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all -- --check
+```
 
 ## Context
 

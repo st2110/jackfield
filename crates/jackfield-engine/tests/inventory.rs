@@ -11,7 +11,7 @@
 mod support;
 
 use jackfield_engine::{Inventory, Media, NodeKey, NodeState, OrphanKind, Pairing, Transport};
-use jackfield_nmos::{
+use nmos::{
     ReceiverLeg, ReceiverTransport, Reception, SenderLeg, SenderTransport, StreamAddress,
     Transmission,
 };
@@ -796,7 +796,7 @@ fn a_node_advertising_no_connection_control_has_no_connection_base() {
 
 #[test]
 fn only_the_collection_given_is_replaced() {
-    use jackfield_nmos::CollectionData;
+    use nmos::CollectionData;
 
     let mut inventory = Inventory::new();
     let key = inventory.observe(&advertisement("converter", [10, 77, 1, 90], 8090));
@@ -813,7 +813,7 @@ fn only_the_collection_given_is_replaced() {
 
 #[test]
 fn a_partial_update_to_a_node_never_read_is_ignored() {
-    use jackfield_nmos::CollectionData;
+    use nmos::CollectionData;
 
     let mut inventory = Inventory::new();
     let key = inventory.observe(&advertisement("converter", [10, 77, 1, 90], 8090));

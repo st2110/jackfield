@@ -18,8 +18,8 @@ use std::net::IpAddr;
 pub use counters::VersionCounters;
 pub use endpoint::Endpoint;
 pub use fabricated::FabricatedDiscovery;
-use jackfield_nmos::ApiVersion;
-pub use jackfield_nmos::NodeCollection as Collection;
+use nmos::ApiVersion;
+pub use nmos::NodeCollection as Collection;
 
 /// The DNS-SD service type an NMOS Node advertises itself under.
 pub const NODE_SERVICE_TYPE: &str = "_nmos-node._tcp.local.";

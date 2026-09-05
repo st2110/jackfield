@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use jackfield_engine::{KnownNode, NodeKey, Snapshot};
-use jackfield_nmos::ResourceId;
+use nmos::ResourceId;
 
 /// A row in the detail pane the highlight can land on.
 ///
@@ -41,7 +41,7 @@ pub struct App {
     selected: Option<NodeKey>,
     screen: Screen,
     /// Senders whose Receiver list the operator has opened.
-    expanded: BTreeSet<jackfield_nmos::ResourceId>,
+    expanded: BTreeSet<nmos::ResourceId>,
     /// Which selectable row of the detail pane is highlighted.
     detail_row: usize,
     /// How far the detail pane has scrolled.

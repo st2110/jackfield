@@ -1,10 +1,16 @@
 # Four crates: the engine owns the truth, the interface owns the screen
 
+> The protocol crate has since been published as `nmos` and is no longer in this
+> workspace. The boundary below is unchanged; only its address is.
+
 The workspace is split so that the compiler, not discipline, enforces the
 boundary:
 
-- `jackfield-nmos` — the resource model and the IS-04 and IS-05 clients. Knows
-  the protocol; **may not know** about state, discovery, or a screen.
+- `nmos` — the resource model and the IS-04 and IS-05 clients. Knows the
+  protocol; **may not know** about state, discovery, or a screen. It lived here
+  as `jackfield-nmos` until it was published on its own
+  (<https://crates.io/crates/nmos>); the boundary this record draws is what made
+  the split a move rather than an extraction.
 - `jackfield-engine` — discovery, the in-memory inventory, and the fetching that
   fills it. Knows the domain; **may not know** that a terminal exists.
 - `jackfield-tui` — `ratatui` and `crossterm`. Renders a snapshot and turns

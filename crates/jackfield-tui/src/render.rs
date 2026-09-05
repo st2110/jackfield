@@ -7,7 +7,7 @@
 use jackfield_engine::{
     DeviceView, KnownNode, NodeState, Pairing, ReceiverView, SenderView, Transport,
 };
-use jackfield_nmos::{MediaType, Reception, Transmission};
+use nmos::{MediaType, Reception, Transmission};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};

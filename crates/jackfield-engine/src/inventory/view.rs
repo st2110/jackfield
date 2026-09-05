@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
-use jackfield_nmos::{
+use nmos::{
     Device, Format, MediaType, Node, Receiver, Reception, ResourceId, Sender, StreamAddress,
     Transmission,
 };

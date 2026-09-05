@@ -3,13 +3,16 @@ name = "jackfield-engine"
 description = "Discovery and the in-memory inventory of NMOS Nodes"
 version.workspace = true
 edition.workspace = true
+# This is the controller, not a library. Its public API is a screen and a set of
+# keystrokes; the protocol is what got published, as `nmos`.
+publish = false
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-jackfield-nmos.workspace = true
+nmos.workspace = true
 mdns-sd.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

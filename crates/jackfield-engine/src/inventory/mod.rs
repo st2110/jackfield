@@ -11,9 +11,7 @@ mod view;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use jackfield_nmos::{
-    CollectionData, ReceiverTransport, ResourceId, ResourceTree, SenderTransport,
-};
+use nmos::{CollectionData, ReceiverTransport, ResourceId, ResourceTree, SenderTransport};
 
 use crate::discovery::{Advertisement, Endpoint, VersionCounters};
 use crate::identity::{Identities, NodeKey};
@@ -298,7 +296,7 @@ impl Inventory {
     pub fn connection_base(&self, key: &NodeKey) -> Option<String> {
         self.trees.get(key)?.devices.iter().find_map(|device| {
             device
-                .control_href(jackfield_nmos::CONNECTION_CONTROL_URN)
+                .control_href(nmos::CONNECTION_CONTROL_URN)
                 .map(|href| {
                     // The advertised href already ends in `/x-nmos/connection/v1.1/`;
                     // the client builds that path itself, so only the origin is kept.
@@ -313,7 +311,7 @@ impl Inventory {
 
     /// The API versions a Node's own record says it speaks.
     #[must_use]
-    pub fn versions_of(&self, key: &NodeKey) -> Vec<jackfield_nmos::ApiVersion> {
+    pub fn versions_of(&self, key: &NodeKey) -> Vec<nmos::ApiVersion> {
         self.trees
             .get(key)
             .map(|tree| {

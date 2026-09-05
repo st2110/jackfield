@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use jackfield_nmos::{ApiVersion, Protocol};
+use nmos::{ApiVersion, Protocol};
 
 /// The version IS-04 says to assume when a Node advertises none.
 const DEFAULT_VERSION: ApiVersion = ApiVersion::new(1, 0);

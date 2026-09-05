@@ -3,7 +3,7 @@
 use std::fmt;
 use std::net::IpAddr;
 
-use jackfield_nmos::Protocol;
+use nmos::Protocol;
 
 /// One address and port at which a Node's API can be reached.
 ///

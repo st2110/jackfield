@@ -8,9 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use jackfield_nmos::{
-    Flow, Receiver, ReceiverTransport, ResourceId, ResourceTree, Sender, SenderTransport,
-};
+use nmos::{Flow, Receiver, ReceiverTransport, ResourceId, ResourceTree, Sender, SenderTransport};
 
 use super::view::{
     DeviceView, Media, NodeContents, Orphan, OrphanKind, Pairing, ReceiverView, SenderView,

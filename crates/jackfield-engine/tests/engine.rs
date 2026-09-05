@@ -19,7 +19,7 @@ use std::time::Duration;
 use jackfield_engine::{
     Command, Engine, EngineConfig, EngineHandle, FabricatedDiscovery, Fetcher, NodeState, Snapshot,
 };
-use jackfield_nmos::{
+use nmos::{
     ApiVersion, CollectionData, NodeCollection, ReceiverTransport, ResourceId, ResourceTree,
     SenderTransport,
 };

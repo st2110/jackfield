@@ -5,7 +5,7 @@
 //! needs is a sentence that points at what to fix, not a type to match on. The
 //! typed errors stay where they can still be acted on, in `jackfield-nmos`.
 
-use jackfield_nmos::{
+use nmos::{
     ApiVersion, CollectionData, ConnectionApiClient, NodeApiClient, NodeCollection,
     ReceiverTransport, ResourceId, ResourceTree, SenderTransport,
 };

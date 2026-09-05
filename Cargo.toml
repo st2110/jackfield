@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "crates/jackfield-nmos",
     "crates/jackfield-engine",
     "crates/jackfield-tui",
     "crates/jackfield",
@@ -16,7 +15,10 @@ repository = "https://github.com/st2110/jackfield"
 authors = ["Flussonic"]
 
 [workspace.dependencies]
-jackfield-nmos = { path = "crates/jackfield-nmos" }
+# The protocol itself, published for anyone who needs NMOS on Rust rather than
+# only this controller: <https://crates.io/crates/nmos>. It used to live here as
+# `jackfield-nmos`; a broadcaster searching for "nmos" would never have found it.
+nmos = "1.1"
 jackfield-engine = { path = "crates/jackfield-engine" }
 jackfield-tui = { path = "crates/jackfield-tui" }
 

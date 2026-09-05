@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use jackfield_nmos::ResourceId;
+use nmos::ResourceId;
 
 use crate::discovery::Advertisement;
 
