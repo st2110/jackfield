@@ -17,7 +17,7 @@ use nmos::{
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinSet;
 
-use crate::connector::Connector;
+use crate::connector::{Connector, StreamSource};
 use crate::discovery::{Advertisement, Discovery, DiscoveryEvent};
 use crate::identity::NodeKey;
 use crate::inventory::{Inventory, KnownNode, Requested};
@@ -395,6 +395,10 @@ where
                     return;
                 };
 
+                // Read now, from what the transport pass has already learned:
+                // the fallback for a Sender that publishes no SDP.
+                let streams = inventory.sender_streams(&sender);
+
                 inventory.request(&receiver, Requested::Subscribed, at);
                 let connector = Arc::clone(&self.connector);
                 let resource = receiver.clone();
@@ -403,7 +407,29 @@ where
                         .fetch_transport_file(sender_base, sender.clone())
                         .await
                     {
-                        Ok(file) => connector.subscribe(base, receiver, sender, file).await,
+                        Ok(Some(file)) => {
+                            connector
+                                .subscribe(
+                                    base,
+                                    receiver,
+                                    sender,
+                                    StreamSource::TransportFile(file),
+                                )
+                                .await
+                        }
+                        Ok(None) if !streams.is_empty() => {
+                            connector
+                                .subscribe(base, receiver, sender, StreamSource::Streams(streams))
+                                .await
+                        }
+                        // Nothing to point the Receiver at. Enabling it anyway
+                        // would leave a Receiver that reports a subscription
+                        // and takes no packets, which is the worst of both.
+                        Ok(None) => Err(
+                            "the Sender publishes no transport file, and no destination has \
+                             been read from it yet — an Idle Sender usually has none"
+                                .to_owned(),
+                        ),
                         Err(reason) => {
                             Err(format!("cannot read the Sender's transport file: {reason}"))
                         }

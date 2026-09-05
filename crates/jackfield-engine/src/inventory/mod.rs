@@ -273,6 +273,22 @@ impl Inventory {
         }
     }
 
+    /// Where a Sender's stream goes, so far as the transport pass has read it.
+    ///
+    /// Empty where it has not run, or where the Sender reports no destination —
+    /// which is what an Idle Sender usually reports.
+    #[must_use]
+    pub fn sender_streams(&self, sender: &ResourceId) -> Vec<nmos::StreamAddress> {
+        match self.sender_transports.get(sender) {
+            Some(Ok(transport)) => transport
+                .legs
+                .iter()
+                .filter_map(nmos::SenderLeg::destination)
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
     /// What has been asked of a resource, if anything.
     #[must_use]
     pub fn requested(&self, resource: &ResourceId) -> Option<&Requested> {

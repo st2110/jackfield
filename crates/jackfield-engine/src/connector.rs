@@ -16,11 +16,28 @@ use nmos::is05::{
     ActivationMode, ActivationPatch, Param, ReceiverRtpParams, ReceiverStagedPatch,
     SenderRtpParams, SenderStagedPatch, TransportFile,
 };
-use nmos::{ApiVersion, ConnectionApiClient, ResourceId};
+use nmos::{ApiVersion, ConnectionApiClient, ResourceId, StreamAddress};
 
 /// The IS-05 version writes are addressed at, matching the reads in
 /// `fetcher.rs`.
 const CONNECTION_VERSION: ApiVersion = ApiVersion::new(1, 1);
+
+/// What a Receiver is told to take.
+///
+/// IS-05 expects the media description to travel from Sender to Receiver as an
+/// SDP, which the controller passes through without reading a word of it. Not
+/// every Sender publishes one — the specification's own answer for equipment
+/// that does not is to make the connection from transport parameters alone —
+/// so the addresses are the fallback, and there is deliberately no third case
+/// where a Receiver is enabled with nothing to point it at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamSource {
+    /// The Sender's transport file, handed over unchanged.
+    TransportFile(String),
+    /// Where the Sender's stream goes, one entry per leg. Two means ST 2022-7,
+    /// and the order is the Sender's own: primary leg first.
+    Streams(Vec<StreamAddress>),
+}
 
 /// What the engine needs in order to change a device.
 pub trait Connector: Send + Sync + 'static {
@@ -33,17 +50,12 @@ pub trait Connector: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), String>> + Send;
 
     /// Point a Receiver at a Sender's stream.
-    ///
-    /// `transport_file` is the Sender's own SDP, read beforehand and passed
-    /// through untouched: IS-05 expects the media description to travel from
-    /// Sender to Receiver, and a controller that rewrote it would be inventing
-    /// a description of a stream it has never seen.
     fn subscribe(
         &self,
         base: String,
         receiver: ResourceId,
         sender: ResourceId,
-        transport_file: Option<String>,
+        source: StreamSource,
     ) -> impl Future<Output = Result<(), String>> + Send;
 
     /// Take a Receiver off whatever it was taking.
@@ -119,8 +131,13 @@ impl Connector for NmosConnector {
         base: String,
         receiver: ResourceId,
         sender: ResourceId,
-        transport_file: Option<String>,
+        source: StreamSource,
     ) -> Result<(), String> {
+        let (transport_file, transport_params) = match source {
+            StreamSource::TransportFile(data) => (Some(TransportFile::sdp(Some(data))), None),
+            StreamSource::Streams(streams) => (None, Some(legs(&streams)?)),
+        };
+
         let patch = ReceiverStagedPatch::<ReceiverRtpParams> {
             // IS-05 requires the Sender to be named when the transport file or
             // the parameters change, so that the Node can report what it is
@@ -128,8 +145,8 @@ impl Connector for NmosConnector {
             sender_id: Param::Set(sender),
             master_enable: Some(true),
             activation: now(),
-            transport_file: transport_file.map(|data| TransportFile::sdp(Some(data))),
-            transport_params: None,
+            transport_file,
+            transport_params,
         };
 
         let staged = self
@@ -172,6 +189,32 @@ impl Connector for NmosConnector {
             .await
             .map_err(|e| e.to_string())
     }
+}
+
+/// One Receiver leg per Sender leg, joining the group the Sender sends to.
+///
+/// `rtp_enabled` is set explicitly on every leg. IS-05 asks a controller to
+/// state the parameters a connection depends on rather than assume them, and on
+/// a redundant Receiver the second leg is exactly the one somebody else may
+/// have left disabled.
+fn legs(streams: &[StreamAddress]) -> Result<Vec<ReceiverRtpParams>, String> {
+    streams
+        .iter()
+        .map(|stream| {
+            let multicast_ip = stream.address.parse().map_err(|_| {
+                format!(
+                    "the Sender reports an address this controller cannot use: {}",
+                    stream.address
+                )
+            })?;
+            Ok(ReceiverRtpParams {
+                multicast_ip: Param::Set(multicast_ip),
+                destination_port: Param::Set(stream.port),
+                rtp_enabled: Param::Set(true),
+                ..ReceiverRtpParams::default()
+            })
+        })
+        .collect()
 }
 
 /// Hold the device to what it answered.

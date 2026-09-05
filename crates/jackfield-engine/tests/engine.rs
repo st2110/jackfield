@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use jackfield_engine::{
     Command, Connector, Engine, EngineConfig, EngineHandle, FabricatedDiscovery, Fetcher, NodeKey,
-    NodeState, Requested, SenderView, Snapshot,
+    NodeState, Requested, SenderView, Snapshot, StreamSource,
 };
 use nmos::{
     ApiVersion, CollectionData, NodeCollection, ReceiverTransport, ResourceId, ResourceTree,
@@ -187,7 +187,7 @@ enum Call {
         base: String,
         receiver: ResourceId,
         sender: ResourceId,
-        transport_file: Option<String>,
+        source: StreamSource,
     },
     Unsubscribe {
         base: String,
@@ -240,13 +240,13 @@ impl Connector for Connections {
         base: String,
         receiver: ResourceId,
         sender: ResourceId,
-        transport_file: Option<String>,
+        source: StreamSource,
     ) -> Result<(), String> {
         self.record(Call::Subscribe {
             base,
             receiver,
             sender,
-            transport_file,
+            source,
         })
         .await
     }
@@ -918,7 +918,7 @@ async fn subscribing_hands_the_receiver_the_senders_own_transport_file() {
             base: "http://10.77.1.90:8090".to_owned(),
             receiver,
             sender,
-            transport_file: Some("v=0\r\n".to_owned()),
+            source: StreamSource::TransportFile("v=0\r\n".to_owned()),
         }
     );
 }

@@ -25,7 +25,7 @@ mod fetcher;
 mod identity;
 mod inventory;
 
-pub use connector::{Connector, NmosConnector};
+pub use connector::{Connector, NmosConnector, StreamSource};
 pub use discovery::mdns::{DiscoveryError, MdnsDiscovery};
 pub use discovery::{
     Advertisement, Collection, Discovery, DiscoveryEvent, Endpoint, FabricatedDiscovery,

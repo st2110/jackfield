@@ -16,8 +16,8 @@
 
 use std::time::Duration;
 
-use jackfield_engine::{Connector, NmosConnector};
-use nmos::{ConnectionApiClient, ResourceId};
+use jackfield_engine::{Connector, NmosConnector, StreamSource};
+use nmos::{ConnectionApiClient, ResourceId, StreamAddress};
 use serde_json::{Value, json};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -151,7 +151,7 @@ async fn connecting_a_receiver_names_the_sender_and_carries_its_transport_file()
             node.uri(),
             id(RECEIVER),
             id(SENDER),
-            Some("v=0\r\n".to_owned()),
+            StreamSource::TransportFile("v=0\r\n".to_owned()),
         )
         .await
         .expect("the node accepts");
@@ -235,5 +235,81 @@ async fn a_sender_with_no_transport_file_yields_none_rather_than_an_error() {
             .await
             .expect("404 is an answer"),
         None
+    );
+}
+
+#[tokio::test]
+async fn a_sender_without_an_sdp_is_taken_by_its_addresses_instead() {
+    // IS-05's own answer for equipment that publishes no transport file: make
+    // the connection from transport parameters. Two legs is ST 2022-7, and the
+    // Sender's order is kept — element 0 is the primary leg.
+    let node = staged_node(
+        "receivers",
+        RECEIVER,
+        ResponseTemplate::new(200).set_body_json(accepted(true, "sender_id", json!(SENDER))),
+    )
+    .await;
+
+    connector()
+        .subscribe(
+            node.uri(),
+            id(RECEIVER),
+            id(SENDER),
+            StreamSource::Streams(vec![
+                StreamAddress {
+                    address: "239.10.10.10".to_owned(),
+                    port: 5004,
+                },
+                StreamAddress {
+                    address: "239.20.20.20".to_owned(),
+                    port: 5006,
+                },
+            ]),
+        )
+        .await
+        .expect("the node accepts");
+
+    assert_eq!(
+        body(&node).await["transport_params"],
+        json!([
+            {"multicast_ip": "239.10.10.10", "destination_port": 5004, "rtp_enabled": true},
+            {"multicast_ip": "239.20.20.20", "destination_port": 5006, "rtp_enabled": true}
+        ])
+    );
+    assert!(
+        body(&node).await.get("transport_file").is_none(),
+        "no file is invented for a Sender that has none"
+    );
+}
+
+#[tokio::test]
+async fn an_address_this_controller_cannot_read_is_refused_rather_than_sent() {
+    // Equipment reports what it likes. A hostname where an address belongs
+    // must not become a patch the Node has to reject.
+    let node = staged_node(
+        "receivers",
+        RECEIVER,
+        ResponseTemplate::new(200).set_body_json(accepted(true, "sender_id", json!(SENDER))),
+    )
+    .await;
+
+    let error = connector()
+        .subscribe(
+            node.uri(),
+            id(RECEIVER),
+            id(SENDER),
+            StreamSource::Streams(vec![StreamAddress {
+                address: "not-an-address".to_owned(),
+                port: 5004,
+            }]),
+        )
+        .await
+        .expect_err("nothing usable to send");
+
+    assert!(error.contains("not-an-address"), "{error}");
+    assert_eq!(
+        node.received_requests().await.unwrap_or_default().len(),
+        0,
+        "nothing was sent"
     );
 }
