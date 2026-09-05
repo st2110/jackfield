@@ -23,4 +23,6 @@ workspace = true
 
 [dev-dependencies]
 mdns-sd.workspace = true
+serde_json.workspace = true
+wiremock.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

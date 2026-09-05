@@ -79,6 +79,25 @@ clocks. Distinct from absent: a Sender whose destination is pending is not a
 Sender going nowhere.
 _Avoid_: none, empty, blank
 
+**Requested**:
+A state the operator asked for, which the controller has sent to the device and
+has not yet seen confirmed by a read of the resource tree. Not an observation:
+it says what was asked, not what is. It survives until a read that started after
+the write answers it, which is what stops a keystroke appearing to do nothing
+while the slower of the two fetch clocks catches up.
+_Avoid_: pending, staged, in progress
+
+**Refused**:
+A request the device declined, held against the resource with the reason the
+device gave. Shown until that Node is read again: a refusal the operator never
+sees is a controller claiming work it did not do.
+
+**Marked**:
+The Sender a subscription will take from, named by the operator before the
+Receiver is pointed at it. The two ends of a connection are usually on different
+Nodes, so they cannot be selected at once.
+_Avoid_: source, selected, copied
+
 **Unknown state**:
 A Sender's or Receiver's connection state that has not been read yet, or could
 not be read. Distinct from Idle and from Unsubscribed, which are positive
