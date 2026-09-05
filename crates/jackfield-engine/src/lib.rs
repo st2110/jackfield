@@ -18,12 +18,14 @@
     )
 )]
 
+mod connector;
 mod discovery;
 mod engine;
 mod fetcher;
 mod identity;
 mod inventory;
 
+pub use connector::{Connector, NmosConnector};
 pub use discovery::mdns::{DiscoveryError, MdnsDiscovery};
 pub use discovery::{
     Advertisement, Collection, Discovery, DiscoveryEvent, Endpoint, FabricatedDiscovery,
@@ -37,5 +39,5 @@ pub use fetcher::NmosFetcher;
 pub use identity::{Identified, Identities, NodeKey};
 pub use inventory::{
     DeviceView, Inventory, KnownNode, Media, NodeContents, NodeState, Orphan, OrphanKind, Pairing,
-    ReceiverView, ResourceRef, SenderView, Transport,
+    ReceiverView, Requested, ResourceRef, SenderView, Transport,
 };

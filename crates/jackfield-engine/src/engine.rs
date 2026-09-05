@@ -17,9 +17,10 @@ use nmos::{
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinSet;
 
+use crate::connector::Connector;
 use crate::discovery::{Advertisement, Discovery, DiscoveryEvent};
 use crate::identity::NodeKey;
-use crate::inventory::{Inventory, KnownNode};
+use crate::inventory::{Inventory, KnownNode, Requested};
 
 /// How many Nodes are read at once.
 ///
@@ -36,6 +37,10 @@ pub const FETCH_CONCURRENCY: usize = 8;
 pub const TRANSPORT_FLOOR: Duration = Duration::from_secs(60);
 
 /// What the interface asks the engine to do.
+///
+/// The last four change equipment. They are named for the state they ask for,
+/// in the words of `CONTEXT.md`: a Sender is Transmitting or Idle, a Receiver
+/// is Subscribed or Unsubscribed, and neither is ever "connected".
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     /// Re-read one Node in full, whatever its counters say.
@@ -44,6 +49,42 @@ pub enum Command {
     RefreshAll,
     /// Stop.
     Stop,
+
+    /// Put a Sender's Flow on the network.
+    StartTransmitting {
+        /// The Node hosting it.
+        node: NodeKey,
+        /// The Sender.
+        sender: ResourceId,
+    },
+
+    /// Take a Sender off the network.
+    StopTransmitting {
+        /// The Node hosting it.
+        node: NodeKey,
+        /// The Sender.
+        sender: ResourceId,
+    },
+
+    /// Have a Receiver take a Sender's stream.
+    Subscribe {
+        /// The Node hosting the Receiver.
+        node: NodeKey,
+        /// The Receiver.
+        receiver: ResourceId,
+        /// The Node hosting the Sender, which is usually a different box.
+        from: NodeKey,
+        /// The Sender whose stream to take.
+        sender: ResourceId,
+    },
+
+    /// Have a Receiver take nothing.
+    Unsubscribe {
+        /// The Node hosting it.
+        node: NodeKey,
+        /// The Receiver.
+        receiver: ResourceId,
+    },
 }
 
 /// The inventory as of one moment.
@@ -127,10 +168,26 @@ impl EngineHandle {
 /// One unit of work the engine has outstanding.
 #[derive(Debug)]
 enum Done {
-    Tree(NodeKey, Box<Result<ResourceTree, String>>),
-    Collection(NodeKey, Box<Result<CollectionData, String>>),
+    /// A resource tree, and the value of the write clock when the read began —
+    /// which is what says whether it can speak to an outstanding request.
+    Tree {
+        key: NodeKey,
+        started_at: u64,
+        result: Box<Result<ResourceTree, String>>,
+    },
+    Collection {
+        key: NodeKey,
+        started_at: u64,
+        result: Box<Result<CollectionData, String>>,
+    },
     SenderTransport(ResourceId, Box<Result<SenderTransport, String>>),
     ReceiverTransport(ResourceId, Box<Result<ReceiverTransport, String>>),
+    /// A write that has been answered, one way or the other.
+    Written {
+        node: NodeKey,
+        resource: ResourceId,
+        result: Box<Result<(), String>>,
+    },
 }
 
 /// What the engine still has to do.
@@ -166,22 +223,25 @@ impl Default for EngineConfig {
 }
 
 /// Runs the inventory.
-pub struct Engine<D, F> {
+pub struct Engine<D, F, C> {
     discovery: D,
     fetcher: Arc<F>,
+    connector: Arc<C>,
     config: EngineConfig,
 }
 
-impl<D, F> Engine<D, F>
+impl<D, F, C> Engine<D, F, C>
 where
     D: Discovery + Send + 'static,
     F: Fetcher,
+    C: Connector,
 {
-    /// An engine over a discovery source and a fetcher.
-    pub fn new(discovery: D, fetcher: F, config: EngineConfig) -> Self {
+    /// An engine over a discovery source, a fetcher and a connector.
+    pub fn new(discovery: D, fetcher: F, connector: C, config: EngineConfig) -> Self {
         Self {
             discovery,
             fetcher: Arc::new(fetcher),
+            connector: Arc::new(connector),
             config,
         }
     }
@@ -210,6 +270,9 @@ where
         let mut pending = Pending::default();
         let mut running: JoinSet<Done> = JoinSet::new();
         let mut generation = 0u64;
+        // Counts writes, so that a read can be told apart from one that was
+        // already on the wire when the operator pressed the key.
+        let mut clock = 0u64;
         let mut last_transport: BTreeMap<NodeKey, tokio::time::Instant> = BTreeMap::new();
 
         for advertisement in subscription.known {
@@ -223,7 +286,7 @@ where
         publish(&snapshots, &mut inventory, &mut generation);
 
         loop {
-            self.start_work(&mut inventory, &mut pending, &mut running);
+            self.start_work(&mut inventory, &mut pending, &mut running, clock);
 
             tokio::select! {
                 event = events.recv() => match event {
@@ -245,12 +308,26 @@ where
                     }
                     Some(Command::RefreshAll) => refresh_all(&inventory, &mut pending),
                     Some(Command::Stop) | None => break,
+                    Some(command) => {
+                        clock += 1;
+                        self.write(&mut inventory, &mut running, command, clock);
+                        // Published at once: the operator sees the request
+                        // land, rather than a screen that does nothing until
+                        // the device answers.
+                        publish(&snapshots, &mut inventory, &mut generation);
+                    }
                 },
 
                 Some(done) = running.join_next(), if !running.is_empty() => {
                     match done {
                         Ok(done) => {
-                            apply_done(&mut inventory, &mut pending, &mut last_transport, done);
+                            apply_done(
+                                &mut inventory,
+                                &mut pending,
+                                &mut last_transport,
+                                &mut clock,
+                                done,
+                            );
                             publish(&snapshots, &mut inventory, &mut generation);
                         }
                         // A fetch task panicked. Nothing here may abort over
@@ -274,12 +351,132 @@ where
         }
     }
 
+    /// Send one change to a device.
+    ///
+    /// Spawned outside the concurrency bound on purpose. That bound exists so
+    /// that discovering a plant does not flood it; an operator's keystroke is a
+    /// single request, and making it wait behind a discovery sweep would be the
+    /// wrong trade in the one case where a person is watching.
+    fn write(
+        &self,
+        inventory: &mut Inventory,
+        running: &mut JoinSet<Done>,
+        command: Command,
+        at: u64,
+    ) {
+        match command {
+            Command::StartTransmitting { node, sender } => {
+                self.transmit(inventory, running, node, sender, true, at);
+            }
+            Command::StopTransmitting { node, sender } => {
+                self.transmit(inventory, running, node, sender, false, at);
+            }
+            Command::Subscribe {
+                node,
+                receiver,
+                from,
+                sender,
+            } => {
+                let Some(base) = controllable(inventory, &node, &receiver, at) else {
+                    return;
+                };
+                // The Sender's transport file is read from the Sender's own
+                // Device, which is usually a different box entirely.
+                let Some(sender_base) = inventory.connection_base(&from, &sender) else {
+                    inventory.request(
+                        &receiver,
+                        Requested::Refused(
+                            "the Sender's Device advertises no Connection API, so its \
+                             transport file cannot be read"
+                                .to_owned(),
+                        ),
+                        at,
+                    );
+                    return;
+                };
+
+                inventory.request(&receiver, Requested::Subscribed, at);
+                let connector = Arc::clone(&self.connector);
+                let resource = receiver.clone();
+                running.spawn(async move {
+                    let result = match connector
+                        .fetch_transport_file(sender_base, sender.clone())
+                        .await
+                    {
+                        Ok(file) => connector.subscribe(base, receiver, sender, file).await,
+                        Err(reason) => {
+                            Err(format!("cannot read the Sender's transport file: {reason}"))
+                        }
+                    };
+                    Done::Written {
+                        node,
+                        resource,
+                        result: Box::new(result),
+                    }
+                });
+            }
+            Command::Unsubscribe { node, receiver } => {
+                let Some(base) = controllable(inventory, &node, &receiver, at) else {
+                    return;
+                };
+                inventory.request(&receiver, Requested::Unsubscribed, at);
+                let connector = Arc::clone(&self.connector);
+                let resource = receiver.clone();
+                running.spawn(async move {
+                    let result = connector.unsubscribe(base, receiver).await;
+                    Done::Written {
+                        node,
+                        resource,
+                        result: Box::new(result),
+                    }
+                });
+            }
+            // Answered before this is reached.
+            Command::Refresh(_) | Command::RefreshAll | Command::Stop => {}
+        }
+    }
+
+    fn transmit(
+        &self,
+        inventory: &mut Inventory,
+        running: &mut JoinSet<Done>,
+        node: NodeKey,
+        sender: ResourceId,
+        on: bool,
+        at: u64,
+    ) {
+        let Some(base) = controllable(inventory, &node, &sender, at) else {
+            return;
+        };
+        inventory.request(
+            &sender,
+            if on {
+                Requested::Transmitting
+            } else {
+                Requested::Idle
+            },
+            at,
+        );
+
+        let connector = Arc::clone(&self.connector);
+        let resource = sender.clone();
+        running.spawn(async move {
+            let result = connector.set_transmitting(base, sender, on).await;
+            Done::Written {
+                node,
+                resource,
+                result: Box::new(result),
+            }
+        });
+    }
+
     /// Start as much outstanding work as the bound allows.
     fn start_work(
         &self,
         inventory: &mut Inventory,
         pending: &mut Pending,
         running: &mut JoinSet<Done>,
+        clock: u64,
     ) {
         while running.len() < self.config.concurrency && !pending.is_empty() {
             if let Some(key) = pending.trees.iter().next().cloned() {
@@ -292,7 +489,11 @@ where
                 let fetcher = Arc::clone(&self.fetcher);
                 running.spawn(async move {
                     let result = fetcher.fetch_tree(base, versions).await;
-                    Done::Tree(key, Box::new(result))
+                    Done::Tree {
+                        key,
+                        started_at: clock,
+                        result: Box::new(result),
+                    }
                 });
                 continue;
             }
@@ -306,7 +507,11 @@ where
                 let fetcher = Arc::clone(&self.fetcher);
                 running.spawn(async move {
                     let result = fetcher.fetch_collection(base, versions, collection).await;
-                    Done::Collection(key, Box::new(result))
+                    Done::Collection {
+                        key,
+                        started_at: clock,
+                        result: Box::new(result),
+                    }
                 });
                 continue;
             }
@@ -394,10 +599,15 @@ fn apply_done(
     inventory: &mut Inventory,
     pending: &mut Pending,
     last_transport: &mut BTreeMap<NodeKey, tokio::time::Instant>,
+    clock: &mut u64,
     done: Done,
 ) {
     match done {
-        Done::Tree(key, result) => match *result {
+        Done::Tree {
+            key,
+            started_at,
+            result,
+        } => match *result {
             Ok(tree) => {
                 let id = tree.node.core.id.clone();
                 let instance = inventory
@@ -409,12 +619,22 @@ fn apply_done(
                     Some(instance) => inventory.identify(&instance, &id),
                     None => key,
                 };
+                // This read is fresher than any request it can answer, so
+                // whatever it says about those resources is now the truth.
+                inventory.settle(&key, started_at);
                 pending.transports.insert(key);
             }
             Err(reason) => inventory.set_failure(&key, reason),
         },
-        Done::Collection(key, result) => match *result {
-            Ok(data) => inventory.update_collection(&key, data),
+        Done::Collection {
+            key,
+            started_at,
+            result,
+        } => match *result {
+            Ok(data) => {
+                inventory.update_collection(&key, data);
+                inventory.settle(&key, started_at);
+            }
             Err(reason) => inventory.set_failure(&key, reason),
         },
         Done::SenderTransport(id, result) => {
@@ -423,6 +643,24 @@ fn apply_done(
         Done::ReceiverTransport(id, result) => {
             inventory.set_receiver_transport(&id, *result);
         }
+        Done::Written {
+            node,
+            resource,
+            result,
+        } => match *result {
+            Ok(()) => {
+                // The device took it. Confirm it by reading the Node back:
+                // until that read lands, the screen goes on showing what was
+                // asked for rather than what was last observed.
+                *clock += 1;
+                pending.trees.insert(node);
+            }
+            Err(reason) => {
+                tracing::warn!(%resource, %reason, "a write was refused");
+                let stamp = inventory.requested_stamp(&resource).unwrap_or(*clock);
+                inventory.request(&resource, Requested::Refused(reason), stamp);
+            }
+        },
     }
 
     for node in inventory.nodes() {
@@ -430,6 +668,30 @@ fn apply_done(
             .entry(node.key.clone())
             .or_insert_with(tokio::time::Instant::now);
     }
+}
+
+/// Where to address a resource, or a refusal saying why it cannot be reached.
+///
+/// A Device that advertises no Connection API is not controllable over IS-05 —
+/// which the operator is told, rather than watching a keystroke do nothing.
+fn controllable(
+    inventory: &mut Inventory,
+    node: &NodeKey,
+    resource: &ResourceId,
+    at: u64,
+) -> Option<String> {
+    let base = inventory.connection_base(node, resource);
+    if base.is_none() {
+        inventory.request(
+            resource,
+            Requested::Refused(
+                "this Device advertises no Connection API, so it cannot be controlled over IS-05"
+                    .to_owned(),
+            ),
+            at,
+        );
+    }
+    base
 }
 
 fn refresh_all(inventory: &Inventory, pending: &mut Pending) {

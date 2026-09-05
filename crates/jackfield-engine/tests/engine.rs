@@ -17,7 +17,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use jackfield_engine::{
-    Command, Engine, EngineConfig, EngineHandle, FabricatedDiscovery, Fetcher, NodeState, Snapshot,
+    Command, Connector, Engine, EngineConfig, EngineHandle, FabricatedDiscovery, Fetcher, NodeKey,
+    NodeState, Requested, SenderView, Snapshot,
 };
 use nmos::{
     ApiVersion, CollectionData, NodeCollection, ReceiverTransport, ResourceId, ResourceTree,
@@ -174,6 +175,108 @@ async fn until(handle: &EngineHandle, ready: impl Fn(&Snapshot) -> bool) -> Opti
     .ok()
 }
 
+/// One thing a connector was asked to do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Call {
+    Transmitting {
+        base: String,
+        sender: ResourceId,
+        on: bool,
+    },
+    Subscribe {
+        base: String,
+        receiver: ResourceId,
+        sender: ResourceId,
+        transport_file: Option<String>,
+    },
+    Unsubscribe {
+        base: String,
+        receiver: ResourceId,
+    },
+    TransportFile {
+        base: String,
+        sender: ResourceId,
+    },
+}
+
+/// A connector that records what it was asked to do, and can be told to refuse
+/// or to never answer at all.
+#[derive(Default, Clone)]
+struct Connections {
+    calls: Arc<Mutex<Vec<Call>>>,
+    /// What the device says when it refuses.
+    refusal: Option<String>,
+    /// What the Sender's transport file contains.
+    transport_file: Option<String>,
+    /// Whether writes hang, so the in-flight state can be seen.
+    stalled: bool,
+}
+
+impl Connections {
+    async fn record(&self, call: Call) -> Result<(), String> {
+        self.calls.lock().await.push(call);
+        if self.stalled {
+            std::future::pending::<()>().await;
+        }
+        match &self.refusal {
+            Some(reason) => Err(reason.clone()),
+            None => Ok(()),
+        }
+    }
+}
+
+impl Connector for Connections {
+    async fn set_transmitting(
+        &self,
+        base: String,
+        sender: ResourceId,
+        on: bool,
+    ) -> Result<(), String> {
+        self.record(Call::Transmitting { base, sender, on }).await
+    }
+
+    async fn subscribe(
+        &self,
+        base: String,
+        receiver: ResourceId,
+        sender: ResourceId,
+        transport_file: Option<String>,
+    ) -> Result<(), String> {
+        self.record(Call::Subscribe {
+            base,
+            receiver,
+            sender,
+            transport_file,
+        })
+        .await
+    }
+
+    async fn unsubscribe(&self, base: String, receiver: ResourceId) -> Result<(), String> {
+        self.record(Call::Unsubscribe { base, receiver }).await
+    }
+
+    async fn fetch_transport_file(
+        &self,
+        base: String,
+        sender: ResourceId,
+    ) -> Result<Option<String>, String> {
+        self.calls
+            .lock()
+            .await
+            .push(Call::TransportFile { base, sender });
+        Ok(self.transport_file.clone())
+    }
+}
+
+/// The first Sender of the first Device, which every write test acts on.
+fn first_sender(snapshot: &Snapshot) -> &SenderView {
+    &snapshot.nodes[0].devices()[0].senders[0]
+}
+
+fn key_of(snapshot: &Snapshot) -> NodeKey {
+    snapshot.nodes[0].key.clone()
+}
+
 fn config() -> EngineConfig {
     EngineConfig {
         concurrency: 8,
@@ -186,7 +289,13 @@ async fn a_discovered_node_is_fetched_and_published() {
     let discovery = Arc::new(FabricatedDiscovery::new());
     let fetcher = Fabricated::new(bench_tree());
     let record = Arc::clone(&fetcher.record);
-    let handle = Engine::new(discovery_with(&discovery), fetcher, config()).spawn();
+    let handle = Engine::new(
+        discovery_with(&discovery),
+        fetcher,
+        Connections::default(),
+        config(),
+    )
+    .spawn();
 
     discovery.advertise(advertisement("converter", [10, 77, 1, 90], 8090));
 
@@ -208,7 +317,13 @@ async fn a_node_that_fails_is_kept_with_its_reason_and_the_others_are_fine() {
     fetcher
         .failures
         .insert("10.77.1.91".to_owned(), "connection refused".to_owned());
-    let handle = Engine::new(discovery_with(&discovery), fetcher, config()).spawn();
+    let handle = Engine::new(
+        discovery_with(&discovery),
+        fetcher,
+        Connections::default(),
+        config(),
+    )
+    .spawn();
 
     discovery.advertise(advertisement("healthy", [10, 77, 1, 90], 8090));
     discovery.advertise(advertisement("broken", [10, 77, 1, 91], 8090));
@@ -245,6 +360,7 @@ async fn at_most_the_bound_are_fetched_at_once() {
     let handle = Engine::new(
         discovery_with(&discovery),
         fetcher,
+        Connections::default(),
         EngineConfig {
             concurrency: 8,
             ..config()
@@ -282,7 +398,13 @@ async fn one_stalled_node_delays_no_other() {
     let discovery = Arc::new(FabricatedDiscovery::new());
     let mut fetcher = Fabricated::new(bench_tree());
     fetcher.stalls.push("10.77.1.99".to_owned());
-    let handle = Engine::new(discovery_with(&discovery), fetcher, config()).spawn();
+    let handle = Engine::new(
+        discovery_with(&discovery),
+        fetcher,
+        Connections::default(),
+        config(),
+    )
+    .spawn();
 
     discovery.advertise(advertisement("stalled", [10, 77, 1, 99], 8090));
     discovery.advertise(advertisement("healthy", [10, 77, 1, 90], 8090));
@@ -306,7 +428,13 @@ async fn only_the_collection_whose_counter_moved_is_re_read() {
     let discovery = Arc::new(FabricatedDiscovery::new());
     let fetcher = Fabricated::new(bench_tree());
     let record = Arc::clone(&fetcher.record);
-    let handle = Engine::new(discovery_with(&discovery), fetcher, config()).spawn();
+    let handle = Engine::new(
+        discovery_with(&discovery),
+        fetcher,
+        Connections::default(),
+        config(),
+    )
+    .spawn();
 
     let mut txt: BTreeMap<String, String> = BTreeMap::new();
     txt.insert("ver_rcv".to_owned(), "9".to_owned());
@@ -347,7 +475,13 @@ async fn an_unchanged_node_is_left_alone() {
     let discovery = Arc::new(FabricatedDiscovery::new());
     let fetcher = Fabricated::new(bench_tree());
     let record = Arc::clone(&fetcher.record);
-    let handle = Engine::new(discovery_with(&discovery), fetcher, config()).spawn();
+    let handle = Engine::new(
+        discovery_with(&discovery),
+        fetcher,
+        Connections::default(),
+        config(),
+    )
+    .spawn();
 
     let advert = advertisement("converter", [10, 77, 1, 90], 8090);
     discovery.advertise(advert.clone());
@@ -365,7 +499,13 @@ async fn an_explicit_refresh_re_reads_in_full_whatever_the_counters_say() {
     let discovery = Arc::new(FabricatedDiscovery::new());
     let fetcher = Fabricated::new(bench_tree());
     let record = Arc::clone(&fetcher.record);
-    let handle = Engine::new(discovery_with(&discovery), fetcher, config()).spawn();
+    let handle = Engine::new(
+        discovery_with(&discovery),
+        fetcher,
+        Connections::default(),
+        config(),
+    )
+    .spawn();
 
     discovery.advertise(advertisement("converter", [10, 77, 1, 90], 8090));
     let snapshot = until(&handle, |s| s.nodes.iter().any(|n| n.state.is_ready()))
@@ -406,6 +546,7 @@ async fn the_transport_pass_runs_even_when_no_counter_ever_moves() {
     let handle = Engine::new(
         discovery_with(&discovery),
         fetcher,
+        Connections::default(),
         EngineConfig {
             concurrency: 8,
             transport_floor: Duration::from_millis(60),
@@ -436,7 +577,13 @@ async fn a_node_discovered_before_the_engine_started_is_not_missed() {
     discovery.advertise(advertisement("early", [10, 77, 1, 90], 8090));
 
     let fetcher = Fabricated::new(bench_tree());
-    let handle = Engine::new(discovery_with(&discovery), fetcher, config()).spawn();
+    let handle = Engine::new(
+        discovery_with(&discovery),
+        fetcher,
+        Connections::default(),
+        config(),
+    )
+    .spawn();
 
     let snapshot = until(&handle, |s| s.nodes.iter().any(|n| n.state.is_ready()))
         .await
@@ -448,7 +595,13 @@ async fn a_node_discovered_before_the_engine_started_is_not_missed() {
 async fn a_departed_node_stops_being_listed() {
     let discovery = Arc::new(FabricatedDiscovery::new());
     let fetcher = Fabricated::new(bench_tree());
-    let handle = Engine::new(discovery_with(&discovery), fetcher, config()).spawn();
+    let handle = Engine::new(
+        discovery_with(&discovery),
+        fetcher,
+        Connections::default(),
+        config(),
+    )
+    .spawn();
 
     discovery.advertise(advertisement("converter", [10, 77, 1, 90], 8090));
     until(&handle, |s| !s.nodes.is_empty())
@@ -466,7 +619,13 @@ async fn a_departed_node_stops_being_listed() {
 async fn stopping_the_engine_ends_it() {
     let discovery = Arc::new(FabricatedDiscovery::new());
     let fetcher = Fabricated::new(bench_tree());
-    let handle = Engine::new(discovery_with(&discovery), fetcher, config()).spawn();
+    let handle = Engine::new(
+        discovery_with(&discovery),
+        fetcher,
+        Connections::default(),
+        config(),
+    )
+    .spawn();
 
     handle.send(Command::Stop).await.expect("sent");
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -506,4 +665,301 @@ fn with_txt(
         txt,
     )
     .expect("usable")
+}
+
+// --- changing a device ------------------------------------------------------
+
+/// An engine over the bench tree with a discovered Node, ready to be written to.
+async fn ready_engine(
+    connections: Connections,
+) -> (Arc<FabricatedDiscovery>, EngineHandle, Arc<Mutex<Record>>) {
+    let discovery = Arc::new(FabricatedDiscovery::new());
+    let fetcher = Fabricated::new(bench_tree());
+    let record = Arc::clone(&fetcher.record);
+    let handle = Engine::new(discovery_with(&discovery), fetcher, connections, config()).spawn();
+    discovery.advertise(advertisement("converter", [10, 77, 1, 90], 8090));
+    until(&handle, |s| s.nodes.iter().any(|n| n.state.is_ready()))
+        .await
+        .expect("the Node is read");
+    (discovery, handle, record)
+}
+
+#[tokio::test]
+async fn a_sender_is_put_on_air_at_the_connection_api_of_its_own_device() {
+    let connections = Connections::default();
+    let calls = Arc::clone(&connections.calls);
+    let (_discovery, handle, _record) = ready_engine(connections).await;
+
+    let snapshot = handle.snapshot();
+    let sender = first_sender(&snapshot).sender.core.id.clone();
+    handle
+        .send(Command::StartTransmitting {
+            node: key_of(&snapshot),
+            sender: sender.clone(),
+        })
+        .await
+        .expect("the engine is running");
+
+    let recorded = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(call) = calls.lock().await.first().cloned() {
+                return call;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the write reaches the device");
+
+    assert_eq!(
+        recorded,
+        Call::Transmitting {
+            base: "http://10.77.1.90:8090".to_owned(),
+            sender,
+            on: true,
+        }
+    );
+}
+
+#[tokio::test]
+async fn a_request_is_visible_before_the_device_answers() {
+    // The two clocks of ADR-0005 mean an observation can lag a write by up to a
+    // minute. Without this the operator's keystroke would appear to do nothing.
+    let connections = Connections {
+        stalled: true,
+        ..Connections::default()
+    };
+    let (_discovery, handle, _record) = ready_engine(connections).await;
+
+    let snapshot = handle.snapshot();
+    let sender = first_sender(&snapshot).sender.core.id.clone();
+    handle
+        .send(Command::StartTransmitting {
+            node: key_of(&snapshot),
+            sender,
+        })
+        .await
+        .expect("the engine is running");
+
+    let snapshot = until(&handle, |s| first_sender(s).requested.is_some())
+        .await
+        .expect("the request shows");
+
+    assert_eq!(
+        first_sender(&snapshot).requested,
+        Some(Requested::Transmitting)
+    );
+}
+
+#[tokio::test]
+async fn a_refusal_is_held_against_the_resource_that_was_refused() {
+    let connections = Connections {
+        refusal: Some("destination_ip is not multicast".to_owned()),
+        ..Connections::default()
+    };
+    let (_discovery, handle, _record) = ready_engine(connections).await;
+
+    let snapshot = handle.snapshot();
+    let sender = first_sender(&snapshot).sender.core.id.clone();
+    handle
+        .send(Command::StartTransmitting {
+            node: key_of(&snapshot),
+            sender,
+        })
+        .await
+        .expect("the engine is running");
+
+    let snapshot = until(&handle, |s| {
+        matches!(first_sender(s).requested, Some(Requested::Refused(_)))
+    })
+    .await
+    .expect("the refusal shows");
+
+    assert_eq!(
+        first_sender(&snapshot).requested,
+        Some(Requested::Refused(
+            "destination_ip is not multicast".to_owned()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn a_write_the_node_confirms_stops_being_a_request() {
+    // The engine reads the Node back after a write. Once that read lands it is
+    // the observation that speaks, and the request has nothing left to say.
+    let connections = Connections::default();
+    let (_discovery, handle, record) = ready_engine(connections).await;
+
+    let snapshot = handle.snapshot();
+    let sender = first_sender(&snapshot).sender.core.id.clone();
+    handle
+        .send(Command::StartTransmitting {
+            node: key_of(&snapshot),
+            sender,
+        })
+        .await
+        .expect("the engine is running");
+
+    // Two trees read: the discovery one, and the confirming one.
+    let confirmed = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if record.lock().await.trees.len() >= 2 {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await;
+    assert!(confirmed.is_ok(), "the write was never confirmed by a read");
+
+    let snapshot = until(&handle, |s| first_sender(s).requested.is_none())
+        .await
+        .expect("the request clears");
+    assert_eq!(first_sender(&snapshot).requested, None);
+}
+
+#[tokio::test]
+async fn a_device_with_no_connection_api_refuses_without_a_request_being_sent() {
+    // Nothing is written into the dark: a Device that advertises no Connection
+    // API is not controllable, and the operator is told so.
+    let discovery = Arc::new(FabricatedDiscovery::new());
+    let mut plain = device(10, "SDI 1", 1);
+    plain.controls.clear();
+    let tree = TreeBuilder::new(1, "Converter")
+        .device(plain)
+        .sender(sender(100, "SDI 1", 10, None))
+        .build();
+    let fetcher = Fabricated::new(tree);
+    let connections = Connections::default();
+    let calls = Arc::clone(&connections.calls);
+    let handle = Engine::new(discovery_with(&discovery), fetcher, connections, config()).spawn();
+    discovery.advertise(advertisement("converter", [10, 77, 1, 90], 8090));
+    let snapshot = until(&handle, |s| s.nodes.iter().any(|n| n.state.is_ready()))
+        .await
+        .expect("the Node is read");
+
+    let sender_id = first_sender(&snapshot).sender.core.id.clone();
+    handle
+        .send(Command::StartTransmitting {
+            node: key_of(&snapshot),
+            sender: sender_id,
+        })
+        .await
+        .expect("the engine is running");
+
+    let snapshot = until(&handle, |s| first_sender(s).requested.is_some())
+        .await
+        .expect("the refusal shows");
+
+    assert!(matches!(
+        first_sender(&snapshot).requested,
+        Some(Requested::Refused(_))
+    ));
+    assert!(
+        calls.lock().await.is_empty(),
+        "nothing was sent to a device that cannot be controlled"
+    );
+}
+
+#[tokio::test]
+async fn subscribing_hands_the_receiver_the_senders_own_transport_file() {
+    // IS-05 expects the media description to travel from Sender to Receiver.
+    // The controller reads it and passes it through; it does not compose one.
+    let connections = Connections {
+        transport_file: Some("v=0\r\n".to_owned()),
+        ..Connections::default()
+    };
+    let calls = Arc::clone(&connections.calls);
+    let (_discovery, handle, _record) = ready_engine(connections).await;
+
+    let snapshot = handle.snapshot();
+    let key = key_of(&snapshot);
+    let sender = first_sender(&snapshot).sender.core.id.clone();
+    let receiver = snapshot.nodes[0].devices()[0].receivers[0]
+        .receiver
+        .core
+        .id
+        .clone();
+
+    handle
+        .send(Command::Subscribe {
+            node: key.clone(),
+            receiver: receiver.clone(),
+            from: key,
+            sender: sender.clone(),
+        })
+        .await
+        .expect("the engine is running");
+
+    let recorded = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let calls = calls.lock().await.clone();
+            if calls.len() >= 2 {
+                return calls;
+            }
+            drop(calls);
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("both requests are made");
+
+    assert_eq!(
+        recorded[0],
+        Call::TransportFile {
+            base: "http://10.77.1.90:8090".to_owned(),
+            sender: sender.clone(),
+        },
+        "the Sender's file is read first"
+    );
+    assert_eq!(
+        recorded[1],
+        Call::Subscribe {
+            base: "http://10.77.1.90:8090".to_owned(),
+            receiver,
+            sender,
+            transport_file: Some("v=0\r\n".to_owned()),
+        }
+    );
+}
+
+#[tokio::test]
+async fn unsubscribing_reaches_the_receivers_own_connection_api() {
+    let connections = Connections::default();
+    let calls = Arc::clone(&connections.calls);
+    let (_discovery, handle, _record) = ready_engine(connections).await;
+
+    let snapshot = handle.snapshot();
+    let receiver = snapshot.nodes[0].devices()[0].receivers[0]
+        .receiver
+        .core
+        .id
+        .clone();
+
+    handle
+        .send(Command::Unsubscribe {
+            node: key_of(&snapshot),
+            receiver: receiver.clone(),
+        })
+        .await
+        .expect("the engine is running");
+
+    let recorded = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(call) = calls.lock().await.first().cloned() {
+                return call;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the write reaches the device");
+
+    assert_eq!(
+        recorded,
+        Call::Unsubscribe {
+            base: "http://10.77.1.90:8090".to_owned(),
+            receiver,
+        }
+    );
 }

@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use jackfield_engine::{
-    Command, Discovery, Engine, EngineConfig, EngineHandle, Fetcher, MdnsDiscovery, NmosFetcher,
-    Snapshot,
+    Command, Connector, Discovery, Engine, EngineConfig, EngineHandle, Fetcher, MdnsDiscovery,
+    NmosConnector, NmosFetcher, Snapshot,
 };
 use jackfield_tui::{Action, App, Screen, TerminalGuard, action_for};
 use nmos::{ConnectionApiClient, NodeApiClient};
@@ -73,7 +73,8 @@ where
     };
     Ok(Engine::new(
         discovery,
-        NmosFetcher::new(node_api, connection_api),
+        NmosFetcher::new(node_api, connection_api.clone()),
+        NmosConnector::new(connection_api),
         config,
     )
     .spawn())
@@ -82,16 +83,22 @@ where
 /// Start an engine over a fetcher of the caller's choosing.
 ///
 /// Used by the end-to-end test, which needs fixture Nodes rather than a plant.
-pub fn spawn_engine_with<D, F>(discovery: D, fetcher: F, options: &Options) -> EngineHandle
+pub fn spawn_engine_with<D, F, C>(
+    discovery: D,
+    fetcher: F,
+    connector: C,
+    options: &Options,
+) -> EngineHandle
 where
     D: Discovery + Send + 'static,
     F: Fetcher,
+    C: Connector,
 {
     let config = EngineConfig {
         concurrency: options.concurrency,
         ..EngineConfig::default()
     };
-    Engine::new(discovery, fetcher, config).spawn()
+    Engine::new(discovery, fetcher, connector, config).spawn()
 }
 
 /// Draw, wait, act, repeat.

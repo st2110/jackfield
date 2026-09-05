@@ -18,7 +18,7 @@ use crate::identity::{Identities, NodeKey};
 
 pub use view::{
     DeviceView, KnownNode, Media, NodeContents, NodeState, Orphan, OrphanKind, Pairing,
-    ReceiverView, ResourceRef, SenderView, Transport,
+    ReceiverView, Requested, ResourceRef, SenderView, Transport,
 };
 
 /// Everything the controller knows about the network.
@@ -38,6 +38,17 @@ pub struct Inventory {
     /// throw away the slower pass's work.
     sender_transports: BTreeMap<ResourceId, Result<SenderTransport, String>>,
     receiver_transports: BTreeMap<ResourceId, Result<ReceiverTransport, String>>,
+    /// What the operator has asked for and the controller has sent, each
+    /// stamped with the write it belongs to so a read that started earlier
+    /// cannot clear it.
+    requested: BTreeMap<ResourceId, Mark>,
+}
+
+/// One outstanding request, and which write it came from.
+#[derive(Debug, Clone)]
+struct Mark {
+    state: Requested,
+    stamp: u64,
 }
 
 impl Inventory {
@@ -234,6 +245,49 @@ impl Inventory {
         }
     }
 
+    /// Record that the operator asked something of a resource.
+    ///
+    /// `stamp` is the engine's write counter at the moment the command was
+    /// accepted. It is what tells a stale read from a fresh one when the mark
+    /// comes to be cleared.
+    pub fn request(&mut self, resource: &ResourceId, state: Requested, stamp: u64) {
+        self.requested
+            .insert(resource.clone(), Mark { state, stamp });
+    }
+
+    /// Drop the marks on a Node's resources that a read this fresh has answered.
+    ///
+    /// A read that started before the write cannot speak to it: it was already
+    /// on the wire when the operator pressed the key, so its answer describes
+    /// the device as it was. Only a later read settles anything.
+    pub fn settle(&mut self, key: &NodeKey, read_started_at: u64) {
+        let (senders, receivers) = self.resources_of(key);
+        for id in senders.into_iter().chain(receivers) {
+            if self
+                .requested
+                .get(&id)
+                .is_some_and(|mark| mark.stamp < read_started_at)
+            {
+                self.requested.remove(&id);
+            }
+        }
+    }
+
+    /// What has been asked of a resource, if anything.
+    #[must_use]
+    pub fn requested(&self, resource: &ResourceId) -> Option<&Requested> {
+        self.requested.get(resource).map(|mark| &mark.state)
+    }
+
+    /// Which write an outstanding request belongs to.
+    ///
+    /// A refusal keeps the stamp of the request it answers, so that the read
+    /// which would have confirmed the request clears the refusal too.
+    #[must_use]
+    pub fn requested_stamp(&self, resource: &ResourceId) -> Option<u64> {
+        self.requested.get(resource).map(|mark| mark.stamp)
+    }
+
     /// Work out which Senders feed which Receivers, across every Node known.
     ///
     /// This is the product. Whether a Sender is transmitting and whether
@@ -241,6 +295,16 @@ impl Inventory {
     /// every Node is visible — can the second be answered. See
     /// `docs/adr/0004-connection-vocabulary-and-graph.md`.
     pub fn resolve_connections(&mut self) {
+        let requested: BTreeMap<ResourceId, Requested> = self
+            .requested
+            .iter()
+            .map(|(id, mark)| (id.clone(), mark.state.clone()))
+            .collect();
+        for node in self.nodes.values_mut() {
+            if let NodeState::Ready(contents) = &mut node.state {
+                resolve::apply_requests(contents, &requested);
+            }
+        }
         graph::resolve(&mut self.nodes);
     }
 

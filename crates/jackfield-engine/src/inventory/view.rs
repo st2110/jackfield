@@ -300,6 +300,44 @@ pub enum Pairing {
     Unmatched,
 }
 
+/// A state the operator asked for, sent to the device, and not yet confirmed by
+/// a read of the resource tree.
+///
+/// Not an observation, which is what makes it a fifth word rather than a sixth
+/// value of `Transmission`. Connection state arrives on the slower of two
+/// clocks — `docs/adr/0005-two-tier-fetch.md` — so an interface that showed
+/// only observations would answer the operator's keystroke by snapping back to
+/// the state the device had a moment ago.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Requested {
+    /// Asked to put its Flow on the network.
+    Transmitting,
+    /// Asked to stop.
+    Idle,
+    /// Asked to take a Sender's stream.
+    Subscribed,
+    /// Asked to take nothing.
+    Unsubscribed,
+    /// The device said no, and this is what it said.
+    ///
+    /// Held until that Node is read again, rather than cleared on the next
+    /// snapshot: a refusal the operator never sees is a controller claiming to
+    /// have done work it did not do.
+    Refused(String),
+}
+
+impl fmt::Display for Requested {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Requested::Transmitting => f.write_str("transmitting requested"),
+            Requested::Idle => f.write_str("idle requested"),
+            Requested::Subscribed => f.write_str("subscription requested"),
+            Requested::Unsubscribed => f.write_str("unsubscribe requested"),
+            Requested::Refused(reason) => write!(f, "refused: {reason}"),
+        }
+    }
+}
+
 /// A Sender, with everything the interface needs to draw its row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SenderView {
@@ -314,6 +352,8 @@ pub struct SenderView {
     /// Every Receiver known to take its stream. May be empty while
     /// Transmitting — that is the state an operator most needs to notice.
     pub taken_by: Vec<ResourceRef>,
+    /// What the operator asked of it, while that is still in flight.
+    pub requested: Option<Requested>,
 }
 
 impl SenderView {
@@ -342,4 +382,6 @@ pub struct ReceiverView {
     pub transport: Transport,
     /// Which Sender feeds it, so far as the controller can tell.
     pub pairing: Pairing,
+    /// What the operator asked of it, while that is still in flight.
+    pub requested: Option<Requested>,
 }

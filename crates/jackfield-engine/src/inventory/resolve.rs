@@ -11,8 +11,8 @@ use std::collections::BTreeMap;
 use nmos::{Flow, Receiver, ReceiverTransport, ResourceId, ResourceTree, Sender, SenderTransport};
 
 use super::view::{
-    DeviceView, Media, NodeContents, Orphan, OrphanKind, Pairing, ReceiverView, SenderView,
-    Transport,
+    DeviceView, Media, NodeContents, Orphan, OrphanKind, Pairing, ReceiverView, Requested,
+    SenderView, Transport,
 };
 
 /// Build a Node's contents from what it returned.
@@ -99,6 +99,7 @@ fn sender_view(
         media,
         transport: sender_transport(transports.get(&sender.core.id)),
         taken_by: Vec::new(),
+        requested: None,
     }
 }
 
@@ -112,6 +113,7 @@ fn receiver_view(
         accepts: receiver.caps.media_types().to_vec(),
         transport: receiver_transport(transports.get(&receiver.core.id)),
         pairing: Pairing::Pending,
+        requested: None,
     }
 }
 
@@ -160,6 +162,26 @@ pub(super) fn apply_transports(
         for receiver in &mut device.receivers {
             receiver.transport =
                 receiver_transport(receiver_transports.get(&receiver.receiver.core.id));
+        }
+    }
+}
+
+/// Push what the operator has asked for into contents built without it.
+///
+/// Run before every snapshot rather than at the moment of the request: the
+/// contents of a Node are rebuilt whenever it is read, and a mark that lived
+/// only in them would be thrown away by the very re-read that was meant to
+/// confirm it.
+pub(super) fn apply_requests(
+    contents: &mut NodeContents,
+    requested: &BTreeMap<ResourceId, Requested>,
+) {
+    for device in &mut contents.devices {
+        for sender in &mut device.senders {
+            sender.requested = requested.get(&sender.sender.core.id).cloned();
+        }
+        for receiver in &mut device.receivers {
+            receiver.requested = requested.get(&receiver.receiver.core.id).cloned();
         }
     }
 }

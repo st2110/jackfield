@@ -93,6 +93,7 @@ pub fn sender_view(n: u16, label: &str, media: &str, transmission: Transmission)
         },
         transport: Transport::Pending,
         taken_by: Vec::new(),
+        requested: None,
     }
 }
 
@@ -115,6 +116,7 @@ pub fn receiver_view(n: u16, label: &str, media: &str, reception: Reception) -> 
         accepts: vec![media.parse().expect("a media type")],
         transport: Transport::Pending,
         pairing: Pairing::None,
+        requested: None,
     }
 }
 
