@@ -1169,9 +1169,11 @@ version = "0.1.0"
 dependencies = [
  "mdns-sd",
  "nmos",
+ "serde_json",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+ "wiremock",
 ]
 
 [[package]]
@@ -1441,9 +1443,9 @@ dependencies = [
 
 [[package]]
 name = "nmos"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0eb5345f35dc84ca8e70cbc60c1292fb448c04111cb3cc0b82121e1580878c99"
+checksum = "b0c6738d4be790cbac0b8ab8884925da412e8af54f18719ba4cd3da3effedcec"
 dependencies = [
  "reqwest",
  "serde",
