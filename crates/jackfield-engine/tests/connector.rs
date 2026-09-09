@@ -151,7 +151,10 @@ async fn connecting_a_receiver_names_the_sender_and_carries_its_transport_file()
             node.uri(),
             id(RECEIVER),
             id(SENDER),
-            StreamSource::TransportFile("v=0\r\n".to_owned()),
+            StreamSource::TransportFile {
+                data: "v=0\r\n".to_owned(),
+                streams: Vec::new(),
+            },
         )
         .await
         .expect("the node accepts");
@@ -163,6 +166,51 @@ async fn connecting_a_receiver_names_the_sender_and_carries_its_transport_file()
             "master_enable": true,
             "activation": {"mode": "activate_immediate"},
             "transport_file": {"data": "v=0\r\n", "type": "application/sdp"}
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_take_states_its_addressing_in_the_file_and_in_the_parameters() {
+    // A Node keeps whatever was staged against it until something replaces it,
+    // and IS-05 makes the parameters win where the two disagree. A take that
+    // named only the file would be judged against the addresses of the take
+    // before it, which is a different stream on the same Receiver.
+    let node = staged_node(
+        "receivers",
+        RECEIVER,
+        ResponseTemplate::new(200).set_body_json(accepted(true, "sender_id", json!(SENDER))),
+    )
+    .await;
+
+    connector()
+        .subscribe(
+            node.uri(),
+            id(RECEIVER),
+            id(SENDER),
+            StreamSource::TransportFile {
+                data: "v=0\r\n".to_owned(),
+                streams: vec![StreamAddress {
+                    address: "239.255.2.190".to_owned(),
+                    port: 16388,
+                }],
+            },
+        )
+        .await
+        .expect("the node accepts");
+
+    assert_eq!(
+        body(&node).await,
+        json!({
+            "sender_id": SENDER,
+            "master_enable": true,
+            "activation": {"mode": "activate_immediate"},
+            "transport_file": {"data": "v=0\r\n", "type": "application/sdp"},
+            "transport_params": [{
+                "multicast_ip": "239.255.2.190",
+                "destination_port": 16388,
+                "rtp_enabled": true
+            }]
         })
     );
 }

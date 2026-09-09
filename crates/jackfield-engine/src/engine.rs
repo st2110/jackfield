@@ -380,6 +380,10 @@ where
                 let Some(base) = controllable(inventory, &node, &receiver, at) else {
                     return;
                 };
+                if let Some(reason) = unacceptable(inventory, &from, &sender, &node, &receiver) {
+                    inventory.request(&receiver, Requested::Refused(reason), at);
+                    return;
+                }
                 // The Sender's transport file is read from the Sender's own
                 // Device, which is usually a different box entirely.
                 let Some(sender_base) = inventory.connection_base(&from, &sender) else {
@@ -395,41 +399,58 @@ where
                     return;
                 };
 
-                // Read now, from what the transport pass has already learned:
-                // the fallback for a Sender that publishes no SDP.
-                let streams = inventory.sender_streams(&sender);
+                // What the transport pass has already learned, kept as the
+                // answer for a Sender whose Connection API will not say again.
+                let known = inventory.sender_streams(&sender);
 
                 inventory.request(&receiver, Requested::Subscribed, at);
                 let connector = Arc::clone(&self.connector);
                 let resource = receiver.clone();
                 running.spawn(async move {
                     let result = match connector
-                        .fetch_transport_file(sender_base, sender.clone())
+                        .fetch_transport_file(sender_base.clone(), sender.clone())
                         .await
                     {
-                        Ok(Some(file)) => {
-                            connector
-                                .subscribe(
-                                    base,
-                                    receiver,
-                                    sender,
-                                    StreamSource::TransportFile(file),
-                                )
+                        Ok(file) => {
+                            // Where the Sender is sending, now: a take states
+                            // its addressing both ways, and stale addresses
+                            // are the half IS-05 would keep.
+                            let streams = connector
+                                .fetch_streams(sender_base, sender.clone())
                                 .await
+                                .unwrap_or(known);
+                            match file {
+                                Some(data) => {
+                                    connector
+                                        .subscribe(
+                                            base,
+                                            receiver,
+                                            sender,
+                                            StreamSource::TransportFile { data, streams },
+                                        )
+                                        .await
+                                }
+                                None if !streams.is_empty() => {
+                                    connector
+                                        .subscribe(
+                                            base,
+                                            receiver,
+                                            sender,
+                                            StreamSource::Streams(streams),
+                                        )
+                                        .await
+                                }
+                                // Nothing to point the Receiver at. Enabling it
+                                // anyway would leave a Receiver that reports a
+                                // subscription and takes no packets, which is
+                                // the worst of both.
+                                None => Err(
+                                    "the Sender publishes no transport file, and no destination \
+                                     has been read from it yet — an Idle Sender usually has none"
+                                        .to_owned(),
+                                ),
+                            }
                         }
-                        Ok(None) if !streams.is_empty() => {
-                            connector
-                                .subscribe(base, receiver, sender, StreamSource::Streams(streams))
-                                .await
-                        }
-                        // Nothing to point the Receiver at. Enabling it anyway
-                        // would leave a Receiver that reports a subscription
-                        // and takes no packets, which is the worst of both.
-                        Ok(None) => Err(
-                            "the Sender publishes no transport file, and no destination has \
-                             been read from it yet — an Idle Sender usually has none"
-                                .to_owned(),
-                        ),
                         Err(reason) => {
                             Err(format!("cannot read the Sender's transport file: {reason}"))
                         }
@@ -694,6 +715,32 @@ fn apply_done(
             .entry(node.key.clone())
             .or_insert_with(tokio::time::Instant::now);
     }
+}
+
+/// Why this Receiver cannot take that Sender's stream, in words for the
+/// operator, or `None` where nothing known rules it out.
+///
+/// Only positive knowledge refuses. A Sender whose Flow has not been read says
+/// nothing about its media type, and a Receiver that declares no media types
+/// says nothing about what it accepts; refusing on either would put this
+/// controller between an operator and equipment that would have said yes.
+fn unacceptable(
+    inventory: &Inventory,
+    from: &NodeKey,
+    sender: &ResourceId,
+    node: &NodeKey,
+    receiver: &ResourceId,
+) -> Option<String> {
+    let media = inventory.sender_media(from, sender)?;
+    let accepts = inventory.receiver_accepts(node, receiver);
+    if accepts.is_empty() || accepts.contains(&media) {
+        return None;
+    }
+    let listed: Vec<&str> = accepts.iter().map(nmos::MediaType::as_str).collect();
+    Some(format!(
+        "this Receiver accepts {}, and that Sender sends {media}",
+        listed.join(", ")
+    ))
 }
 
 /// Where to address a resource, or a refusal saying why it cannot be reached.

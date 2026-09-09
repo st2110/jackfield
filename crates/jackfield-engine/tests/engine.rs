@@ -17,14 +17,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use jackfield_engine::{
-    Command, Connector, Engine, EngineConfig, EngineHandle, FabricatedDiscovery, Fetcher, NodeKey,
-    NodeState, Requested, SenderView, Snapshot, StreamSource,
+    Command, Connector, Engine, EngineConfig, EngineHandle, FabricatedDiscovery, Fetcher,
+    KnownNode, NodeKey, NodeState, Requested, SenderView, Snapshot, StreamSource,
 };
 use nmos::{
     ApiVersion, CollectionData, NodeCollection, ReceiverTransport, ResourceId, ResourceTree,
-    SenderTransport,
+    SenderTransport, StreamAddress,
 };
-use support::{TreeBuilder, advertisement, bench_tree, device, sender};
+use support::{TreeBuilder, advertisement, bench_tree, device, receiver, sender, transmitting};
 use tokio::sync::Mutex;
 
 /// What a fabricated fetcher was asked for.
@@ -197,6 +197,10 @@ enum Call {
         base: String,
         sender: ResourceId,
     },
+    Streams {
+        base: String,
+        sender: ResourceId,
+    },
 }
 
 /// A connector that records what it was asked to do, and can be told to refuse
@@ -208,6 +212,10 @@ struct Connections {
     refusal: Option<String>,
     /// What the Sender's transport file contains.
     transport_file: Option<String>,
+    /// Where the Sender's Connection API says the stream goes.
+    streams: Vec<StreamAddress>,
+    /// What the Sender's Connection API says instead of that.
+    streams_refusal: Option<String>,
     /// Whether writes hang, so the in-flight state can be seen.
     stalled: bool,
 }
@@ -266,11 +274,34 @@ impl Connector for Connections {
             .push(Call::TransportFile { base, sender });
         Ok(self.transport_file.clone())
     }
+
+    async fn fetch_streams(
+        &self,
+        base: String,
+        sender: ResourceId,
+    ) -> Result<Vec<StreamAddress>, String> {
+        self.calls.lock().await.push(Call::Streams { base, sender });
+        match &self.streams_refusal {
+            Some(reason) => Err(reason.clone()),
+            None => Ok(self.streams.clone()),
+        }
+    }
 }
 
 /// The first Sender of the first Device, which every write test acts on.
 fn first_sender(snapshot: &Snapshot) -> &SenderView {
     &snapshot.nodes[0].devices()[0].senders[0]
+}
+
+/// What has been asked of one Receiver, wherever it is.
+fn requested_receiver<'a>(snapshot: &'a Snapshot, id: &ResourceId) -> Option<&'a Requested> {
+    snapshot
+        .nodes
+        .iter()
+        .flat_map(KnownNode::devices)
+        .flat_map(|device| &device.receivers)
+        .find(|receiver| &receiver.receiver.core.id == id)
+        .and_then(|receiver| receiver.requested.as_ref())
 }
 
 fn key_of(snapshot: &Snapshot) -> NodeKey {
@@ -867,6 +898,10 @@ async fn subscribing_hands_the_receiver_the_senders_own_transport_file() {
     // The controller reads it and passes it through; it does not compose one.
     let connections = Connections {
         transport_file: Some("v=0\r\n".to_owned()),
+        streams: vec![StreamAddress {
+            address: "239.255.2.190".to_owned(),
+            port: 16388,
+        }],
         ..Connections::default()
     };
     let calls = Arc::clone(&connections.calls);
@@ -894,7 +929,7 @@ async fn subscribing_hands_the_receiver_the_senders_own_transport_file() {
     let recorded = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             let calls = calls.lock().await.clone();
-            if calls.len() >= 2 {
+            if calls.len() >= 3 {
                 return calls;
             }
             drop(calls);
@@ -902,7 +937,7 @@ async fn subscribing_hands_the_receiver_the_senders_own_transport_file() {
         }
     })
     .await
-    .expect("both requests are made");
+    .expect("all three requests are made");
 
     assert_eq!(
         recorded[0],
@@ -914,12 +949,89 @@ async fn subscribing_hands_the_receiver_the_senders_own_transport_file() {
     );
     assert_eq!(
         recorded[1],
+        Call::Streams {
+            base: "http://10.77.1.90:8090".to_owned(),
+            sender: sender.clone(),
+        },
+        "and where it is sending, now rather than from the last pass"
+    );
+    assert_eq!(
+        recorded[2],
         Call::Subscribe {
             base: "http://10.77.1.90:8090".to_owned(),
             receiver,
             sender,
-            source: StreamSource::TransportFile("v=0\r\n".to_owned()),
+            source: StreamSource::TransportFile {
+                data: "v=0\r\n".to_owned(),
+                streams: vec![StreamAddress {
+                    address: "239.255.2.190".to_owned(),
+                    port: 16388,
+                }],
+            },
         }
+    );
+}
+
+#[tokio::test]
+async fn a_sender_that_will_not_say_where_it_sends_falls_back_to_the_last_pass() {
+    // The Connection API can refuse the second read — a device under load, a
+    // vendor that answers `/active` slowly — and a take that gave up there
+    // would be a take lost to a detail the operator cannot see.
+    let connections = Connections {
+        transport_file: Some("v=0\r\n".to_owned()),
+        streams_refusal: Some("the device is busy".to_owned()),
+        ..Connections::default()
+    };
+    let calls = Arc::clone(&connections.calls);
+    let (_discovery, handle, _record) = ready_engine(connections).await;
+
+    let snapshot = handle.snapshot();
+    let key = key_of(&snapshot);
+    let sender = first_sender(&snapshot).sender.core.id.clone();
+    let receiver = snapshot.nodes[0].devices()[0].receivers[0]
+        .receiver
+        .core
+        .id
+        .clone();
+
+    handle
+        .send(Command::Subscribe {
+            node: key.clone(),
+            receiver: receiver.clone(),
+            from: key,
+            sender: sender.clone(),
+        })
+        .await
+        .expect("the engine is running");
+
+    let recorded = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let calls = calls.lock().await.clone();
+            if calls
+                .iter()
+                .any(|call| matches!(call, Call::Subscribe { .. }))
+            {
+                return calls;
+            }
+            drop(calls);
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the take still reaches the device");
+
+    assert_eq!(
+        recorded.last(),
+        Some(&Call::Subscribe {
+            base: "http://10.77.1.90:8090".to_owned(),
+            receiver,
+            sender,
+            source: StreamSource::TransportFile {
+                data: "v=0\r\n".to_owned(),
+                streams: Vec::new(),
+            },
+        }),
+        "the file still travels, with whatever addresses were already known"
     );
 }
 
@@ -962,4 +1074,112 @@ async fn unsubscribing_reaches_the_receivers_own_connection_api() {
             receiver,
         }
     );
+}
+
+// --- what a Receiver can take -----------------------------------------------
+
+#[tokio::test]
+async fn a_take_the_receiver_does_not_accept_is_refused_before_anything_is_written() {
+    // The bench case: the Ancillary Sender of SDI 1 marked, and the Receiver
+    // that takes video/raw pointed at it. A Node may refuse this in whatever
+    // words it likes — or accept it and pass rubbish — and neither is a good
+    // way for an operator to find out.
+    let connections = Connections {
+        transport_file: Some("v=0\r\n".to_owned()),
+        ..Connections::default()
+    };
+    let calls = Arc::clone(&connections.calls);
+    let (_discovery, handle, _record) = ready_engine(connections).await;
+
+    let snapshot = handle.snapshot();
+    let key = key_of(&snapshot);
+    let device = &snapshot.nodes[0].devices()[0];
+    // The bench Device carries video/raw, audio/L24 and video/smpte291, in
+    // that order, on both sides.
+    let ancillary = device.senders[2].sender.core.id.clone();
+    let video = device.receivers[0].receiver.core.id.clone();
+
+    handle
+        .send(Command::Subscribe {
+            node: key.clone(),
+            receiver: video.clone(),
+            from: key,
+            sender: ancillary,
+        })
+        .await
+        .expect("the engine is running");
+
+    let snapshot = until(&handle, |s| {
+        matches!(requested_receiver(s, &video), Some(Requested::Refused(_)))
+    })
+    .await
+    .expect("the refusal shows");
+
+    let Some(Requested::Refused(reason)) = requested_receiver(&snapshot, &video) else {
+        panic!("the take was not refused");
+    };
+    assert!(
+        reason.contains("video/smpte291") && reason.contains("video/raw"),
+        "the refusal names neither end: {reason}"
+    );
+    assert!(
+        calls.lock().await.is_empty(),
+        "a refused take still went to the wire: {:?}",
+        calls.lock().await
+    );
+}
+
+#[tokio::test]
+async fn a_sender_whose_flow_has_not_been_read_is_not_second_guessed() {
+    // No Flow means no media type, which is ignorance, not evidence. Refusing
+    // on it would make the controller the thing standing between an operator
+    // and equipment that would have accepted the take.
+    let discovery = Arc::new(FabricatedDiscovery::new());
+    let tree = TreeBuilder::new(1, "Converter")
+        .device(device(10, "SDI 1", 1))
+        .sender(transmitting(sender(100, "SDI 1", 10, None)))
+        .receiver(receiver(400, "SDI 1", 10, "video/raw"))
+        .build();
+    let connections = Connections {
+        transport_file: Some("v=0\r\n".to_owned()),
+        ..Connections::default()
+    };
+    let calls = Arc::clone(&connections.calls);
+    let handle = Engine::new(
+        discovery_with(&discovery),
+        Fabricated::new(tree),
+        connections,
+        config(),
+    )
+    .spawn();
+    discovery.advertise(advertisement("converter", [10, 77, 1, 90], 8090));
+    let snapshot = until(&handle, |s| s.nodes.iter().any(|n| n.state.is_ready()))
+        .await
+        .expect("the Node is read");
+
+    let key = key_of(&snapshot);
+    let device = &snapshot.nodes[0].devices()[0];
+    let sender_id = device.senders[0].sender.core.id.clone();
+    let receiver_id = device.receivers[0].receiver.core.id.clone();
+
+    handle
+        .send(Command::Subscribe {
+            node: key.clone(),
+            receiver: receiver_id,
+            from: key,
+            sender: sender_id,
+        })
+        .await
+        .expect("the engine is running");
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if !calls.lock().await.is_empty() {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the take reaches the device");
 }

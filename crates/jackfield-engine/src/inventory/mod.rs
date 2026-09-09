@@ -289,6 +289,36 @@ impl Inventory {
         }
     }
 
+    /// The media type a Sender puts on the network.
+    ///
+    /// `None` where the Sender names no Flow, or names one this controller has
+    /// not read: neither is evidence about the stream, and a caller must not
+    /// treat them as one.
+    #[must_use]
+    pub fn sender_media(&self, key: &NodeKey, sender: &ResourceId) -> Option<nmos::MediaType> {
+        let tree = self.trees.get(key)?;
+        let flow_id = tree
+            .senders
+            .iter()
+            .find(|held| &held.core.id == sender)?
+            .flow_id
+            .as_ref()?;
+        let flow = tree.flows.iter().find(|flow| flow.id() == flow_id)?;
+        Some(flow.media_type().clone())
+    }
+
+    /// The media types a Receiver says it accepts, empty where it says nothing.
+    #[must_use]
+    pub fn receiver_accepts(&self, key: &NodeKey, receiver: &ResourceId) -> Vec<nmos::MediaType> {
+        self.trees
+            .get(key)
+            .into_iter()
+            .flat_map(|tree| &tree.receivers)
+            .find(|held| &held.core.id == receiver)
+            .map(|held| held.caps.media_types().to_vec())
+            .unwrap_or_default()
+    }
+
     /// What has been asked of a resource, if anything.
     #[must_use]
     pub fn requested(&self, resource: &ResourceId) -> Option<&Requested> {

@@ -32,8 +32,20 @@ const CONNECTION_VERSION: ApiVersion = ApiVersion::new(1, 1);
 /// where a Receiver is enabled with nothing to point it at.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamSource {
-    /// The Sender's transport file, handed over unchanged.
-    TransportFile(String),
+    /// The Sender's transport file, handed over unchanged, with the addresses
+    /// the Sender reports for the same stream.
+    ///
+    /// Both, because a Node holds whatever was staged against it until
+    /// something replaces it, and IS-05 makes the parameters win where the two
+    /// disagree: a take that named only the file would be judged against the
+    /// addresses of the take before it. The addresses may be empty, for a
+    /// Sender that publishes a file and no destination.
+    TransportFile {
+        /// The SDP, unread.
+        data: String,
+        /// Where the Sender says the stream goes, one entry per leg.
+        streams: Vec<StreamAddress>,
+    },
     /// Where the Sender's stream goes, one entry per leg. Two means ST 2022-7,
     /// and the order is the Sender's own: primary leg first.
     Streams(Vec<StreamAddress>),
@@ -71,6 +83,18 @@ pub trait Connector: Send + Sync + 'static {
         base: String,
         sender: ResourceId,
     ) -> impl Future<Output = Result<Option<String>, String>> + Send;
+
+    /// Read where a Sender is sending, at the moment of the take.
+    ///
+    /// Read again rather than taken from the inventory: what the transport pass
+    /// learned may be a minute old, and stale addresses staged alongside a fresh
+    /// transport file are the one disagreement IS-05 resolves in favour of the
+    /// stale half.
+    fn fetch_streams(
+        &self,
+        base: String,
+        sender: ResourceId,
+    ) -> impl Future<Output = Result<Vec<StreamAddress>, String>> + Send;
 }
 
 /// Writes to Connection APIs over HTTP.
@@ -134,7 +158,12 @@ impl Connector for NmosConnector {
         source: StreamSource,
     ) -> Result<(), String> {
         let (transport_file, transport_params) = match source {
-            StreamSource::TransportFile(data) => (Some(TransportFile::sdp(Some(data))), None),
+            StreamSource::TransportFile { data, streams } if streams.is_empty() => {
+                (Some(TransportFile::sdp(Some(data))), None)
+            }
+            StreamSource::TransportFile { data, streams } => {
+                (Some(TransportFile::sdp(Some(data))), Some(legs(&streams)?))
+            }
             StreamSource::Streams(streams) => (None, Some(legs(&streams)?)),
         };
 
@@ -188,6 +217,23 @@ impl Connector for NmosConnector {
             .fetch_transport_file(&base, CONNECTION_VERSION, &sender)
             .await
             .map_err(|e| e.to_string())
+    }
+
+    async fn fetch_streams(
+        &self,
+        base: String,
+        sender: ResourceId,
+    ) -> Result<Vec<StreamAddress>, String> {
+        let transport = self
+            .connection_api
+            .fetch_sender_transport(&base, CONNECTION_VERSION, &sender)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(transport
+            .legs
+            .iter()
+            .filter_map(nmos::SenderLeg::destination)
+            .collect())
     }
 }
 
