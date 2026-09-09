@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use jackfield_engine::{KnownNode, NodeKey, ReceiverView, SenderView, Snapshot};
+use jackfield_engine::{DeviceView, KnownNode, NodeKey, ReceiverView, SenderView, Snapshot};
 use nmos::ResourceId;
 
 /// A row in the detail pane the highlight can land on.
@@ -21,6 +21,21 @@ pub enum DetailTarget {
     Sender(ResourceId),
     /// A Receiver.
     Receiver(ResourceId),
+}
+
+/// The Marked Sender, found in the latest snapshot.
+///
+/// Carried as the three resources rather than as a finished phrase: how a
+/// Sender is named on screen is the renderer's business, and this crate keeps
+/// the two apart.
+#[derive(Debug, Clone, Copy)]
+pub struct MarkedSource<'a> {
+    /// The Node the Sender lives on, which is rarely the Node on screen.
+    pub node: &'a KnownNode,
+    /// The Device it belongs to.
+    pub device: &'a DeviceView,
+    /// The Sender itself.
+    pub sender: &'a SenderView,
 }
 
 /// Which pane the operator is in.
@@ -226,6 +241,29 @@ impl App {
     #[must_use]
     pub fn marked(&self) -> Option<&(NodeKey, ResourceId)> {
         self.marked.as_ref()
+    }
+
+    /// The Marked Sender as the latest snapshot has it.
+    ///
+    /// `None` both when nothing is marked and when the mark names a Sender
+    /// this controller can no longer see — a Node that went away holds neither
+    /// its Devices nor its Senders. The two are different things to say on
+    /// screen, and [`App::marked`] tells them apart.
+    #[must_use]
+    pub fn marked_source(&self) -> Option<MarkedSource<'_>> {
+        let (key, id) = self.marked.as_ref()?;
+        let node = self.snapshot.nodes.iter().find(|node| &node.key == key)?;
+        node.devices().iter().find_map(|device| {
+            device
+                .senders
+                .iter()
+                .find(|sender| &sender.sender.core.id == id)
+                .map(|sender| MarkedSource {
+                    node,
+                    device,
+                    sender,
+                })
+        })
     }
 
     /// Open or close the list under the highlight.

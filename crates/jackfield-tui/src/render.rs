@@ -18,7 +18,7 @@ use crate::app::{App, DetailTarget, Screen};
 
 /// The keys the interface answers to, shown on screen so an operator need not
 /// know them already.
-pub const KEY_HINTS: &str = " up/down move  enter/right open  esc/left back  space expand  t on/off  m mark source  r refresh  q quit ";
+pub const KEY_HINTS: &str = " up/down move  enter/right open  esc/left back  space expand  t on/off  m mark sender  r refresh  q quit ";
 
 /// Marks the row the keyboard is on.
 ///
@@ -32,12 +32,34 @@ const FOCUS: &str = "◂";
 /// Draw the whole screen.
 pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let area = frame.area();
+
+    // The mark costs a row of the panes, so it takes one only while it is
+    // held: an operator who is not connecting anything gets the whole screen.
+    let mark = marked_line(app);
+    let head = usize::from(mark.is_some());
+    let mut constraints = Vec::with_capacity(3);
+    if mark.is_some() {
+        constraints.push(Constraint::Length(1));
+    }
+    constraints.push(Constraint::Min(1));
+    constraints.push(Constraint::Length(1));
+
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        .constraints(constraints)
         .split(area);
 
-    let Some(body) = rows.first().copied() else {
+    if let (Some(text), Some(top)) = (mark, rows.first().copied()) {
+        // Bold rather than reversed: reversed is what the highlighted row
+        // wears, and two rows wearing it would read as two highlights. Both
+        // degrade to plain text on a terminal that has neither.
+        frame.render_widget(
+            Paragraph::new(text).style(Style::default().add_modifier(Modifier::BOLD)),
+            top,
+        );
+    }
+
+    let Some(body) = rows.get(head).copied() else {
         return;
     };
     let panes = Layout::default()
@@ -52,9 +74,33 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     if let Some(right) = panes.get(1).copied() {
         draw_detail(frame, app, right);
     }
-    if let Some(footer) = rows.get(1).copied() {
+    if let Some(footer) = rows.get(head.saturating_add(1)).copied() {
         frame.render_widget(Paragraph::new(KEY_HINTS), footer);
     }
+}
+
+/// The Marked Sender, said in one line, or nothing while nothing is marked.
+///
+/// At the top because the Receiver it will feed is somewhere else entirely: by
+/// the time an operator presses `t`, the Sender they named is off screen, on
+/// another Node, and the only thing that can tell them what they are about to
+/// connect is a line that does not move.
+fn marked_line(app: &App) -> Option<String> {
+    // Asked of the mark itself, not of the Sender it found: a Sender that has
+    // gone off the network leaves the mark standing, and an operator holding
+    // one has to be told that rather than left with an empty top line.
+    app.marked()?;
+
+    Some(match app.marked_source() {
+        Some(source) => format!(
+            " Marked  {} / {} / {} [{}] ",
+            source.node.display_name(),
+            source.device.device.core.label,
+            source.sender.sender.core.label,
+            source.sender.media,
+        ),
+        None => " Marked  a Sender no longer on screen ".to_owned(),
+    })
 }
 
 fn draw_nodes(frame: &mut Frame<'_>, app: &App, area: Rect) {

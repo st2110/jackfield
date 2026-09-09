@@ -23,7 +23,7 @@ mod keys;
 mod render;
 mod terminal;
 
-pub use app::{App, DetailTarget, Screen};
+pub use app::{App, DetailTarget, MarkedSource, Screen};
 pub use input::keys;
 pub use keys::{Action, action_for};
 pub use render::{KEY_HINTS, draw};
